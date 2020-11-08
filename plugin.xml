@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <extension
+         point="org.eclipse.ui.views">
+      <category
+            id="info.codesaway.dyce"
+            name="DYCE">
+      </category>
+      <view
+            category="info.codesaway.dyce"
+            class="info.codesaway.dyce.DYCEView"
+            icon="icons/DYCE.png"
+            id="info.codesaway.dyce.DYCEView"
+            name="DYCE">
+      </view>
+   </extension>
+   <extension
+         point="org.eclipse.ui.commands">
+      <category
+            id="info.codesaway.dyce.commands.category"
+            name="DYCE">
+      </category>
+      <command
+            categoryId="info.codesaway.dyce.commands.category"
+            defaultHandler="info.codesaway.dyce.handlers.RebuildIndexHandler"
+            id="info.codesaway.dyce.commands.rebuildindex"
+            name="Rebuild Index">
+      </command>
+   </extension>
+   <extension
+         point="org.eclipse.ui.menus">
+      <menuContribution
+            allPopups="false"
+            locationURI="menu:info.codesaway.dyce.DYCEView">
+         <command
+               commandId="info.codesaway.dyce.commands.rebuildindex"
+               label="Rebuild Index"
+               style="push">
+         </command>
+      </menuContribution>
+   </extension>
+</plugin>
