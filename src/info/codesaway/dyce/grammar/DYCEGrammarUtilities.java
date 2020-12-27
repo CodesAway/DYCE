@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -57,7 +58,6 @@ import info.codesaway.bex.diff.DiffUnit;
 import info.codesaway.bex.diff.myers.MyersLinearDiff;
 import info.codesaway.bex.parsing.BEXParsingLanguage;
 import info.codesaway.bex.parsing.BEXString;
-import info.codesaway.bex.util.BEXUtilities;
 import info.codesaway.dyce.DYCESearch;
 import info.codesaway.dyce.DYCESearchResult;
 import info.codesaway.dyce.DYCESearchResultEntry;
@@ -83,6 +83,8 @@ public final class DYCEGrammarUtilities {
 	private static final int MAX_DIFFERENCE = 4;
 	private static final int[] FIBONACCI_NUMBERS = getFibonacciNumbers(100);
 
+	private static final Comparator<Indexed<String>> DESCENDING_INDEXED_COMPARATOR = getDescendingIndexedComparator();
+
 	/**
 	 * Gets fibonacci numbers starting with 1, 1
 	 *
@@ -101,6 +103,15 @@ public final class DYCEGrammarUtilities {
 		}
 
 		return fibonacciNumbers;
+	}
+
+	private static Comparator<Indexed<String>> getDescendingIndexedComparator() {
+		// TODO: replace with comparators added to BEX (issue #113)
+		Comparator<Indexed<String>> comparator = Comparator.comparingInt(Indexed::getIndex);
+		// Done separately, since compiler gets confused if part of above line
+		comparator = comparator.reversed();
+
+		return comparator;
 	}
 
 	public static void addGrammarRule(final List<DYCEGrammarRule> grammarRules, final String bexPattern,
@@ -219,11 +230,6 @@ public final class DYCEGrammarUtilities {
 
 		// Preprocess to combine capitalized parts
 		// For now, can use to workaround since not doing lookup by type
-
-		// TODO: use LCS to determine which class name or variable name is closest
-		// Start with just local variables
-		// Use imports to determine potential class names
-		// Can then build over time
 
 		// TODO: see how to reuse majority of grammar for converting code to sentence
 
@@ -385,11 +391,11 @@ public final class DYCEGrammarUtilities {
 
 			@Override
 			public boolean visit(final VariableDeclarationFragment node) {
-				Optional<IntRange> optionalScope = this.variableScopes.stream()
+				Optional<IntRange> determinedScope = this.variableScopes.stream()
 						.filter(v -> v.contains(node.getName().getStartPosition()))
 						.findFirst();
 
-				if (!optionalScope.isPresent()) {
+				if (!determinedScope.isPresent()) {
 					System.out.println(
 							"No scope for variable " + node.getName().getIdentifier() + "\t" + node.getStartPosition());
 					// Should never happen
@@ -402,7 +408,7 @@ public final class DYCEGrammarUtilities {
 
 				int position = node.getName().getStartPosition();
 
-				IntRange scope = optionalScope.get();
+				IntRange scope = determinedScope.get();
 				variables.add(new VariableScope(variableName, position, scope));
 
 				IVariableBinding variableBinding = node.resolveBinding();
@@ -411,53 +417,7 @@ public final class DYCEGrammarUtilities {
 					// For example, ArrayList doesn't declare stream method (in List interface)
 					System.out.println("Methods for variable " + variableBinding.getName());
 
-					// TODO: track each type and determine the methods
-					// Index this, since fairly static
-					// https://stackoverflow.com/a/36964588
-					List<ITypeBinding> bindings = new ArrayList<>();
-
-					ArrayDeque<ITypeBinding> bindingsToProcess = new ArrayDeque<>();
-					bindingsToProcess.add(variableBinding.getType());
-
-					Set<String> methodNames = new TreeSet<>();
-
-					do {
-						ITypeBinding typeBinding = bindingsToProcess.removeLast();
-
-						if (bindings.stream().anyMatch(b -> typeBinding.isEqualTo(b))) {
-							// Already processed
-							continue;
-						}
-
-						bindings.add(typeBinding);
-
-						// Add super class / interface(s) to be processed
-						ITypeBinding superclass = typeBinding.getSuperclass();
-
-						if (superclass != null) {
-							bindingsToProcess.add(superclass);
-						}
-
-						ITypeBinding[] interfaces = typeBinding.getInterfaces();
-
-						for (ITypeBinding interfaceBinding : interfaces) {
-							bindingsToProcess.add(interfaceBinding);
-						}
-
-						//						System.out.println("Methods of type: " + typeBinding.getName());
-						Stream.of(typeBinding.getDeclaredMethods())
-								// Ignore constructors
-								.filter(not(IMethodBinding::isConstructor))
-								// Ignore static methods, since wouldn't invoke using variable
-								.filter(m -> !Modifier.isStatic(m.getModifiers()))
-								// TODO: only include private, protected, or package protected in certain circumstances
-								// The goal is to only show methods which could be invoked based on the current scope
-								.filter(m -> Modifier.isPublic(m.getModifiers()))
-								.map(IMethodBinding::getName)
-								.forEach(methodNames::add);
-						//								.forEach(m -> System.out.println("Method: " + m));
-
-					} while (!bindingsToProcess.isEmpty());
+					Collection<String> methodNames = determineMethodsForType(variableBinding.getType());
 
 					System.out.println("Method names for variable: " + variableBinding.getName());
 					methodNames.forEach(System.out::println);
@@ -465,20 +425,8 @@ public final class DYCEGrammarUtilities {
 					String methodNameText = "steam";
 
 					// Determine similarity
-
-					// TODO: replace with comparators added to BEX (issue #113)
-					Comparator<Indexed<String>> comparator = Comparator.comparingInt(Indexed::getIndex);
-					// Done separately, since compiler gets confused if part of above line
-					comparator = comparator.reversed();
-
-					List<Indexed<String>> similarMethodNames = methodNames.stream()
-							//							.filter(v -> v.isInScope(offset))
-							//							.filter(v -> v.isBeforePosition(offset))
-							.map(i -> determineSimilarity(i, methodNameText))
-							// 0 is usd to represent "not similar"
-							.filter(i -> i.getIndex() > 0)
-							.sorted(comparator)
-							.collect(toList());
+					List<Indexed<String>> similarMethodNames = determineSimilarity(methodNames.stream(),
+							methodNameText);
 
 					System.out.println("Similar method names: \t" + similarMethodNames.size());
 					similarMethodNames.forEach(System.out::println);
@@ -515,22 +463,14 @@ public final class DYCEGrammarUtilities {
 
 		compilationUnit.accept(visitor);
 
-		// TODO: replace with comparators added to BEX (issue #113)
-		Comparator<Indexed<String>> comparator = Comparator.comparingInt(Indexed::getIndex);
-		// Done separately, since compiler gets confused if part of above line
-		comparator = comparator.reversed();
-
 		int offset = documentSelection.getOffset();
 
-		List<Indexed<String>> similarVariableNames = variables.stream()
+		Stream<String> suggestions = variables.stream()
 				.filter(v -> v.isInScope(offset))
 				.filter(v -> v.isBeforePosition(offset))
-				.map(VariableScope::getName)
-				.map(i -> determineSimilarity(i, variableNameText))
-				// 0 is usd to represent "not similar"
-				.filter(i -> i.getIndex() > 0)
-				.sorted(comparator)
-				.collect(toList());
+				.map(VariableScope::getName);
+
+		List<Indexed<String>> similarVariableNames = determineSimilarity(suggestions, variableNameText);
 
 		System.out.println("Similar variable names: \t" + similarVariableNames.size());
 		similarVariableNames.forEach(System.out::println);
@@ -548,6 +488,58 @@ public final class DYCEGrammarUtilities {
 		}
 
 		return variableNameText;
+	}
+
+	protected static Collection<String> determineMethodsForType(final ITypeBinding type) {
+		// TODO: limit to ones in scope, based on current cursor position
+
+		// TODO: track each type and determine the methods
+		// Index this, since fairly static
+		// https://stackoverflow.com/a/36964588
+		List<ITypeBinding> bindingsAlreadyProcessed = new ArrayList<>();
+
+		ArrayDeque<ITypeBinding> bindingsToProcess = new ArrayDeque<>();
+		bindingsToProcess.add(type);
+
+		Set<String> methodNames = new TreeSet<>();
+
+		do {
+			ITypeBinding typeBinding = bindingsToProcess.removeLast();
+
+			if (bindingsAlreadyProcessed.stream().anyMatch(b -> typeBinding.isEqualTo(b))) {
+				// Already processed
+				continue;
+			}
+
+			bindingsAlreadyProcessed.add(typeBinding);
+
+			// Add super class / interface(s) to be processed
+			ITypeBinding superclass = typeBinding.getSuperclass();
+
+			if (superclass != null) {
+				bindingsToProcess.add(superclass);
+			}
+
+			ITypeBinding[] interfaces = typeBinding.getInterfaces();
+
+			for (ITypeBinding interfaceBinding : interfaces) {
+				bindingsToProcess.add(interfaceBinding);
+			}
+
+			Stream.of(typeBinding.getDeclaredMethods())
+					// Ignore constructors
+					.filter(not(IMethodBinding::isConstructor))
+					// Ignore static methods, since wouldn't invoke using variable
+					.filter(m -> !Modifier.isStatic(m.getModifiers()))
+					// TODO: only include private, protected, or package protected in certain circumstances
+					// The goal is to only show methods which could be invoked based on the current scope
+					.filter(m -> Modifier.isPublic(m.getModifiers()))
+					.map(IMethodBinding::getName)
+					.forEach(methodNames::add);
+
+		} while (!bindingsToProcess.isEmpty());
+
+		return methodNames;
 	}
 
 	public static String determineClassName(final String classNameText) {
@@ -576,17 +568,8 @@ public final class DYCEGrammarUtilities {
 		@SuppressWarnings("unchecked")
 		List<ImportDeclaration> imports = compilationUnit.imports();
 
-		// TODO: replace with comparators added to BEX (issue #113)
-		Comparator<Indexed<String>> comparator = Comparator.comparingInt(Indexed::getIndex);
-		// Done separately, since compiler gets confused if part of above line
-		comparator = comparator.reversed();
-
-		List<Indexed<String>> similarImportNames = imports.stream()
-				.map(i -> determineSimilarity(i, classNameText))
-				// 0 is usd to represent "not similar"
-				.filter(i -> i.getIndex() > 0)
-				.sorted(comparator)
-				.collect(toList());
+		List<Indexed<String>> similarImportNames = determineSimilarity(imports.stream()
+				.map(DYCEGrammarUtilities::getImportedClassName), classNameText);
 
 		// TODO: also keep track of the package name, in case need to add import
 		// Also, when giving choices, could show the package name
@@ -600,18 +583,11 @@ public final class DYCEGrammarUtilities {
 			System.out.println("Matching import: " + match);
 		}
 
-		//		NavigableMap<Integer, NavigableMap<Integer, List<String>>> orderSimilarNames = new TreeMap<>();
-		//		if (similarNames.isEmpty()) {
-		//		System.out.println("Found no similar looking at imports!");
-		// Since none are similar, open up to ANY class name and also import
+		// Open up to ANY class name and also import
 		DYCESearch search = new DYCESearch(
 				"class:(" + classNameText + ") AND (type:class type:interface type:enum)", 1000,
 				DYCESettings.getSearcherWorkspace(), Operator.OR);
 
-		//		DYCESearch search = new DYCESearch(
-		//				"class:(" + classNameText + ") AND (type:class type:interface type:enum)", 0,
-		//				false, 1000,
-		//				Optional.empty(), DYCESettings.getSearcherWorkspace(), Operator.OR, false);
 		try {
 			DYCESearchResult searchResult = DYCESearchJob.search(search, null);
 
@@ -621,18 +597,11 @@ public final class DYCEGrammarUtilities {
 				System.out.println("No results!");
 			}
 
-			//				for (DYCESearchResultEntry result : results) {
-			//					System.out.println("Result: " + result.getClassName());
-			//				}
-
-			List<Indexed<String>> similarSearchedNames = searchResult.getResults()
+			Stream<String> suggestions = searchResult.getResults()
 					.stream()
-					.map(DYCESearchResultEntry::getClassName)
-					.map(name -> determineSimilarity(name, classNameText, true))
-					// 0 is usd to represent "not similar"
-					.filter(i -> i.getIndex() > 0)
-					.sorted(comparator)
-					.collect(toList());
+					.map(DYCESearchResultEntry::getClassName);
+
+			List<Indexed<String>> similarSearchedNames = determineSimilarity(suggestions, classNameText, true);
 
 			if (match == null && similarSearchedNames.isEmpty()) {
 				return classNameText;
@@ -643,33 +612,13 @@ public final class DYCEGrammarUtilities {
 					match = otherMatch;
 				} else if (otherMatch.getIndex() > match.getIndex()) {
 					// If better match, use it
-					// (if has same scope, use existing match, based on imports
+					// (if has same score, use existing match, based on existing imports
 					match = otherMatch;
 				}
 			}
 		} catch (IOException | QueryNodeException | ParseException e) {
 			return classNameText;
 		}
-		//		}
-
-		//		for (Indexed<String> name : similarNames) {
-		//			NavigableMap<Integer, List<String>> secondLevelMap = orderSimilarNames.computeIfAbsent(difference,
-		//					x -> new TreeMap<>(Comparator.reverseOrder()));
-		//			List<String> list = secondLevelMap.computeIfAbsent(name.getIndex(), x -> new ArrayList<>());
-		//			list.add(name.getValue());
-
-		//			System.out.printf("Similar: %s\t%d%n", name);
-		//		}
-
-		//		if (orderSimilarNames.isEmpty()) {
-		//			return classNameText;
-		//		}
-
-		// Find the first entry, which will have the least amount of unused characters
-		//		NavigableMap<Integer, List<String>> secondLevelMap = orderSimilarNames.firstEntry().getValue();
-
-		// Then, find the first entry, which will have the most number of shared characters (LCS - longest common subsequence)
-		//		List<String> list = secondLevelMap.firstEntry().getValue();
 
 		if (match == null) {
 			return classNameText;
@@ -679,74 +628,60 @@ public final class DYCEGrammarUtilities {
 
 		String matchValue = match.getValue();
 
-		//		System.out.println("Matches:");
-		//		list.forEach(e -> System.out.printf("Found match %s%n", e));
-
-		//		return list.get(0);
 		return matchValue;
 	}
 
-	/**
-	 * Determine similarity and assign a similarity score
-	 * @param importDeclaration the import which to check how similar
-	 * @param classNameText the class name text to compare against
-	 * @return the passed classNameText with the "index" being the similarity score
-	 */
-	private static Indexed<String> determineSimilarity(final ImportDeclaration importDeclaration,
-			final String classNameText) {
+	private static String getImportedClassName(final ImportDeclaration importDeclaration) {
 		Name name = importDeclaration.getName();
 		SimpleName importedClass = name.isSimpleName()
 				? (SimpleName) name
 				: ((QualifiedName) name).getName();
-		String importedClassName = importedClass.getIdentifier();
 
-		return determineSimilarity(importedClassName, classNameText);
+		return importedClass.getIdentifier();
 	}
 
-	private static Indexed<String> determineSimilarity(final String suggestedClassName, final String classNameText) {
-		return determineSimilarity(suggestedClassName, classNameText, false);
+	private static List<Indexed<String>> determineSimilarity(final Stream<String> suggestions, final String inputText) {
+		return determineSimilarity(suggestions, inputText, false);
 	}
 
-	private static Indexed<String> determineSimilarity(final String suggestedClassName, final String classNameText,
+	private static List<Indexed<String>> determineSimilarity(final Stream<String> suggestions, final String inputText,
 			final boolean ignoreDifferences) {
-		// TODO: instead of using LcsString, use MyersLinearDiff
-		// This way, will correctly get long strings of consecutive characters
-		// For example, servlet and servletcontext
-		// LCS doesn't correctly get that servlet is continuous
-		// Whereas, Myers will
-		// This way, the score is applied correctly, since add value based on FIBONACCI number of length
-		// (so longer sequences have higher scores)
+		return suggestions
+				.map(i -> determineSimilarity(i, inputText, ignoreDifferences))
+				// 0 is used to represent "not similar"
+				.filter(i -> i.getIndex() > 0)
+				.sorted(DESCENDING_INDEXED_COMPARATOR)
+				.collect(toList());
+	}
 
-		//		LcsString lcsString = new LcsString(importedClassName.trim().toLowerCase(), classNameText.trim().toLowerCase());
-		//		int lcs = lcsString.lcsLength();
-
-		List<DiffEdit> diff = diff(suggestedClassName, classNameText);
-
-		//		if (suggestedClassName.equals("Comment")) {
-		//			System.out.println("Diff details:");
-		//			diff.forEach(System.out::println);
-		//		}
+	/**
+	 * Determine similarity and assign a similarity score
+	 * @param suggestion the suggestion
+	 * @param inputText the inputted text to compare against
+	 * @return the passed inputted text with the "index" being the similarity score
+	 */
+	private static Indexed<String> determineSimilarity(final String suggestion, final String inputText,
+			final boolean ignoreDifferences) {
+		// Use Myers diff to determine corresponding parts
+		// * Preferred over LCS since Myers is better at finding continuous ranges of matching characters
+		// * These continuous ranges result in higher scores
+		//   	Since 6 consecutive matching characters is preferred to
+		//   	6 separate matching characters
+		List<DiffEdit> diff = diff(suggestion, inputText);
 
 		int matchingCount = (int) diff.stream().filter(DiffEdit::shouldTreatAsNormalizedEqual).count();
 
-		boolean isSimilar = matchingCount > Math.min(suggestedClassName.length(), classNameText.length()) * 0.5
+		boolean isSimilar = matchingCount > Math.min(suggestion.length(), inputText.length()) * 0.5
 				&& isEachWordSimilar(diff);
 
-		//		if (importedClassName.equals("WarningMsg")) {
-		//			System.out.println("diff()");
-		//			lcsString.diff().forEach(System.out::println);
-		//			System.out.println("diff0()");
-		//			lcsString.diff0().forEach(System.out::println);
-		//		}
-
-		int difference = suggestedClassName.length() - matchingCount;
+		int difference = suggestion.length() - matchingCount;
 
 		int score;
 
 		if (!isSimilar || difference > MAX_DIFFERENCE && !ignoreDifferences) {
 			score = 0;
 		} else {
-			// TODO: verify this works as expected - created unit test
+			// TODO: verify this works as expected - create unit test
 			score = Math.round(matchingCount * 0.75f);
 
 			// TODO: should add to score if ignore differences and difference is less than MAX_DIFFERENCE?
@@ -763,12 +698,6 @@ public final class DYCEGrammarUtilities {
 				if (!diffUnit.shouldTreatAsNormalizedEqual()) {
 					continue;
 				}
-				//				if (!diffText.startsWith(" ")) {
-				//					// Non-matching characters (added / deleted)
-				//					continue;
-				//				}
-
-				//				int count = diffText.length() - 1;
 				int count = diffUnit.getEdits().size();
 
 				// Use fibonacci numbers, since a run of 6 is better than 2 runs of 3, even though both 6 characters
@@ -783,23 +712,16 @@ public final class DYCEGrammarUtilities {
 			}
 		}
 
-		boolean showDebug = BEXUtilities.in(suggestedClassName, "WarningMsg", "NamingException")
-				|| suggestedClassName.contains("Servlet")
-				|| suggestedClassName.contains("List")
-				|| suggestedClassName.contains("Message")
-				|| suggestedClassName.contains("Comment");
+		boolean showDebug = false;
 
-		//		if (showDebug && score > 0) {
 		if (showDebug) {
-			System.out.printf("Similar? %s %d %d: score %d%n", suggestedClassName, matchingCount, difference, score);
+			System.out.printf("Similar? %s %d %d: score %d%n", suggestion, matchingCount, difference, score);
 		}
 
-		return new IndexedValue<>(score, suggestedClassName);
+		return new IndexedValue<>(score, suggestion);
 	}
 
 	private static List<DiffEdit> diff(final String importedClassName, final String classNameText) {
-		//		LcsString lcsString = new LcsString(importedClassName.trim().toLowerCase(), classNameText.trim().toLowerCase());
-
 		String text1 = importedClassName.trim().toLowerCase();
 		String text2 = classNameText.trim().toLowerCase();
 
@@ -814,7 +736,6 @@ public final class DYCEGrammarUtilities {
 	}
 
 	private static boolean isEachWordSimilar(final List<DiffEdit> diff) {
-		//		boolean isWordSimilar = false;
 		int wordSimilar = 0;
 		int wordCount = 0;
 
@@ -822,47 +743,21 @@ public final class DYCEGrammarUtilities {
 			if (entry.shouldTreatAsNormalizedEqual()) {
 				wordSimilar++;
 				wordCount++;
-				//				isWordSimilar = true;
 			} else if (entry.getType() == INSERT && entry.getRightText().equals(" ")) {
-				// Doesn't handle cases with abbreviations such as Msg for Message (since only 3 characters, yet message is 7)
-				//				boolean isWordSimilar = wordSimilar >= Math.ceil(wordCount * 0.5);
 				boolean isWordSimilar = wordSimilar >= Math.floor(wordCount * 0.33) && wordSimilar > 0;
 
-				//				System.out.printf("%d %d%n", wordSimilar, wordCount);
 				if (!isWordSimilar) {
 					return false;
 				}
 
 				wordSimilar = 0;
 				wordCount = 0;
-				//				isWordSimilar = false;
 			} else if (entry.getType() == INSERT) {
 				wordCount++;
 			}
 		}
 
-		//		System.out.printf("%d %d%n", wordSimilar, wordCount);
-
-		//		boolean isWordSimilar = wordSimilar >= Math.ceil(wordCount * 0.5);
 		boolean isWordSimilar = wordSimilar >= Math.floor(wordCount * 0.33) && wordSimilar > 0;
 		return isWordSimilar;
 	}
-
-	//	private static boolean isEachWordSimilar(final LcsString lcsString) {
-	//		boolean isWordSimilar = false;
-	//
-	//		for (LcsDiffEntry<Character> entry : lcsString.diff()) {
-	//			if (entry.getType() == LcsDiffType.NONE) {
-	//				isWordSimilar = true;
-	//			} else if (entry.getType() == LcsDiffType.ADD && entry.getValue() == ' ') {
-	//				if (!isWordSimilar) {
-	//					return false;
-	//				}
-	//
-	//				isWordSimilar = false;
-	//			}
-	//		}
-	//
-	//		return isWordSimilar;
-	//	}
 }
