@@ -3,13 +3,15 @@ package info.codesaway.dyce;
 public class DYCESearchResultEntry {
 	private final int resultIndex;
 	private final String resultNumber;
+	private final String packageName;
+	private final String className;
 	private final String file;
 	private final String element;
 	private final String line;
-	private final String content;
+	//	private final String content;
 	private final String type;
 	private final String path;
-	private final String extension;
+	//	private final String extension;
 
 	/**
 	 *
@@ -20,18 +22,19 @@ public class DYCESearchResultEntry {
 	 * @param type
 	 * @param path
 	 */
-	public DYCESearchResultEntry(final int resultIndex, final String file, final String element, final String line,
-			final String content, final String type, final String path, final String extension) {
+	public DYCESearchResultEntry(final int resultIndex, final String packageName, final String className,
+			final String file, final String element, final String line,
+			final String type, final String path) {
 		this.resultIndex = resultIndex;
 		this.resultNumber = String.valueOf(resultIndex);
 
+		this.packageName = packageName;
+		this.className = className;
 		this.file = file;
 		this.element = element;
 		this.line = line;
-		this.content = content;
 		this.type = type;
 		this.path = path;
-		this.extension = extension;
 	}
 
 	public int getResultIndex() {
@@ -40,6 +43,14 @@ public class DYCESearchResultEntry {
 
 	public String getResultNumber() {
 		return this.resultNumber;
+	}
+
+	public String getPackageName() {
+		return this.packageName;
+	}
+
+	public String getClassName() {
+		return this.className;
 	}
 
 	public String getFile() {
@@ -52,10 +63,6 @@ public class DYCESearchResultEntry {
 
 	public String getLine() {
 		return this.line;
-	}
-
-	public String getContent() {
-		return this.content;
 	}
 
 	public String getType() {
@@ -77,9 +84,5 @@ public class DYCESearchResultEntry {
 		} catch (NumberFormatException e) {
 			return 0;
 		}
-	}
-
-	public String getExtension() {
-		return this.extension;
 	}
 }

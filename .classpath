@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
+	<classpathentry exported="true" kind="lib" path="lib/bex.jar"/>
+	<classpathentry exported="true" kind="lib" path="lib/becr.jar"/>
 	<classpathentry exported="true" kind="lib" path="lib/lucene-queryparser-8.3.1.jar"/>
 	<classpathentry exported="true" kind="lib" path="lib/lucene-queries-8.3.1.jar"/>
 	<classpathentry exported="true" kind="lib" path="lib/lucene-core-8.3.1.jar"/>
 	<classpathentry exported="true" kind="lib" path="lib/lucene-analyzers-common-8.3.1.jar"/>
-	<classpathentry exported="true" kind="lib" path="lib/regexplus.jar"/>
+	<classpathentry exported="true" kind="lib" path="lib/regexplus.jar" sourcepath="C:/Users/trshco/.m2/repository/info/codesaway/regexplus/2.0.0/regexplus-2.0.0-sources.jar"/>
 	<classpathentry exported="true" kind="lib" path="lib/indexer-core.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8"/>
 	<classpathentry kind="src" path="src"/>

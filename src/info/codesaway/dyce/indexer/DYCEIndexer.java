@@ -7,7 +7,6 @@ import static info.codesaway.util.indexer.IndexerUtilities.createMetaDocument;
 import static java.util.stream.Collectors.toSet;
 
 import java.io.IOException;
-import java.net.URI;
 import java.nio.charset.Charset;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -22,7 +21,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
@@ -47,22 +45,22 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.Bits;
-import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
-import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.OperationCanceledException;
 import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.NonNullByDefault;
-import org.eclipse.jdt.core.IJavaProject;
-import org.eclipse.jdt.core.JavaCore;
-import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
+import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.EnumDeclaration;
 import org.eclipse.jdt.core.dom.IMethodBinding;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.MethodInvocation;
+import org.eclipse.jdt.core.dom.Modifier;
+import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
+import org.eclipse.jdt.core.dom.TypeDeclaration;
 
 import info.codesaway.dyce.Activator;
 import info.codesaway.dyce.DYCESettings;
@@ -399,7 +397,7 @@ public class DYCEIndexer {
 				try {
 					jdkStream = Files.walk(root)
 							.filter(DYCEIndexer::shouldIndexJDKZipEntry)
-							.map(p -> new PathWithLastModified("[JDK]", p))
+							.map(p -> new PathWithLastModified("[JDK].zip", p))
 							.filter(p -> searcher == null ? true : shouldIndex(p, documents));
 
 					//					Files.walk(root)
@@ -587,7 +585,7 @@ public class DYCEIndexer {
 		String extension = getExtension(filename);
 
 		if (extension.equals("java")) {
-			addJavaDocument(indexWriter, path);
+			addJavaDocument(indexWriter, project, path);
 		}
 
 		// Store information about the file itself
@@ -607,119 +605,23 @@ public class DYCEIndexer {
 		indexWriter.addDocument(metaDocument);
 	}
 
-	private static void addJavaDocument(final IndexWriter indexWriter, final Path path) throws IOException {
-		String pathString = path.toString();
-		String filename = path.getFileName().toString();
+	private static void addJavaDocument(final IndexWriter indexWriter, final String project, final Path path)
+			throws IOException {
+		boolean isZip = project.endsWith(".zip") || project.endsWith(".jar");
 
-		ASTParser parser = ASTParser.newParser(AST.JLS13);
-		parser.setResolveBindings(true);
-		parser.setKind(ASTParser.K_COMPILATION_UNIT);
+		ASTNode astNode = DYCEUtilities.createAST(path);
 
-		parser.setBindingsRecovery(true);
-		// TODO: not sure if needed, but setting
-		parser.setStatementsRecovery(true);
-
-		boolean alreadySetSource = false;
-		try {
-			URI uri = path.toUri();
-
-			// Used to prevent CoreException which checking zip files
-			// (in this case, wouldn't expect to find in project)
-			// org.eclipse.core.runtime.CoreException: No file system is defined for scheme: jar
-			if (!Objects.equals(uri.getScheme(), "jar")) {
-				IFile[] files = Activator.WORKSPACE_ROOT.findFilesForLocationURI(uri);
-
-				if (files.length > 0) {
-					IProject iProject = files[0].getProject();
-					// Set source to compilation unit, so can resolve bindings
-					parser.setSource(JavaCore.createCompilationUnitFrom(files[0]));
-					alreadySetSource = true;
-					// https://stackoverflow.com/a/12521662
-					if (iProject != null && iProject.hasNature(JavaCore.NATURE_ID)) {
-						IJavaProject javaProject = JavaCore.create(iProject);
-						// Not sure what this does, if anything, but no harm keeping
-						parser.setProject(javaProject);
-
-						//						System.out.println("Project location: " + javaProject.getOutputLocation());
-
-						//						System.out.println(
-						//								javaProject.getElementName() + "\t"
-						//										+ Arrays.toString(javaProject.getResolvedClasspath(true)));
-
-						//						String[] classpathEntries = Arrays.stream(javaProject.getResolvedClasspath(true))
-						//								.map(IClasspathEntry::getPath)
-						//								.map(IPath::toPortableString)
-						//								//								.map(Object::toString)
-						//								.toArray(String[]::new);
-
-						//						classpathEntries = new String[] {
-						//								"C:\\Users\\trshco\\Dropbox\\EclipsePlugin\\runtime-EclipseApplication\\Test\\src" };
-
-						//						parser.setEnvironment(classpathEntries, new String[] { path.toString() },
-						//								new String[] { "UTF-8" }, false);
-
-						//						Arrays.stream(javaProject.getResolvedClasspath(true))
-						//								.map(IClasspathEntry::getPath)
-						//								.forEach(c -> System.out.println(c));
-					}
-				}
-			}
-		} catch (CoreException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
-		if (!alreadySetSource) {
-			String source = new String(Files.readAllBytes(path));
-			parser.setSource(source.toCharArray());
-		}
-
-		Map<String, String> options = JavaCore.getOptions();
-
-		// Required to correctly read enums
-		// http://help.eclipse.org/kepler/index.jsp?topic=%2Forg.eclipse.jdt.doc.isv%2Freference%2Fapi%2Forg%2Feclipse%2Fjdt%2Fcore%2Fdom%2FASTParser.html
-		JavaCore.setComplianceOptions(JavaCore.VERSION_1_8, options);
-
-		parser.setCompilerOptions(options);
-
-		ASTNode astNode = parser.createAST(null);
-
-		CompilationUnit compilationUnit;
-
-		if (astNode instanceof CompilationUnit) {
-			compilationUnit = (CompilationUnit) astNode;
-		} else {
-			compilationUnit = null;
-		}
+		CompilationUnit compilationUnit = astNode instanceof CompilationUnit
+				? (CompilationUnit) astNode
+				: null;
 
 		ASTVisitor visitor = new ASTVisitor() {
 			@Override
-			public boolean visit(final MethodDeclaration methodDeclaration) {
-				String elementName = methodDeclaration.getName().getIdentifier();
-
-				IMethodBinding binding = methodDeclaration.resolveBinding();
-
-				//				if (binding != null) {
-				// TODO: need to add classpath so can resolve binding
-				System.out.println(methodDeclaration.getName() + "\t" + methodDeclaration.resolveBinding());
-				//				}
-
-				Document document = new Document();
-
-				document.add(new StringField(FULL_PATH_FIELD, pathString, Field.Store.YES));
-
-				// Index path with normal parser, so can search path
-				// (don't store, since value is already stored as part of
-				// fullpath)
-				document.add(new TextField(PATH_FIELD, pathString, Field.Store.NO));
-				document.add(new TextField("file", filename, Field.Store.YES));
-				document.add(new TextField("element", elementName, Field.Store.YES));
-
-				if (compilationUnit != null) {
-					int lineNumber = compilationUnit.getLineNumber(methodDeclaration.getName().getStartPosition());
-					document.add(new IntPoint("line", lineNumber));
-					document.add(new StoredField("line", lineNumber));
-				}
+			public boolean visit(final EnumDeclaration node) {
+				String name = node.getName().getIdentifier();
+				String packageName = DYCEUtilities.getPackageName(compilationUnit);
+				Document document = createDocument(path, packageName, name, name, compilationUnit,
+						node.getName(), "Enum " + name);
 
 				if (!indexWriter.isOpen()) {
 					return false;
@@ -728,8 +630,134 @@ public class DYCEIndexer {
 				try {
 					indexWriter.addDocument(document);
 				} catch (IOException e) {
+					// Do nothing
+				}
+
+				return true;
+			}
+
+			@Override
+			public boolean visit(final TypeDeclaration node) {
+				String name = node.getName().getIdentifier();
+				String packageName = DYCEUtilities.getPackageName(compilationUnit);
+				String type = node.isInterface() ? "Interface " : "Class ";
+				Document document = createDocument(path, packageName, name, name, compilationUnit,
+						node.getName(), type + name);
+
+				// TODO: need to also index inherited methods / fields
+				// Look at super class and super interfaces
+				// Idea is to fully process file itself
+				// Then, when done, add any missing inherited methods / fields
+				// (indicate where inherited from)
+				// node.getSuperclassType();
+				// node.superInterfaceTypes();
+				// The goal is to know given a specific object what instance methods can be called
+				// Will then filter based on current scope, so can list all methods
+
+				if (!indexWriter.isOpen()) {
+					return false;
+				}
+
+				try {
+					indexWriter.addDocument(document);
+				} catch (IOException e) {
+					// Do nothing
+				}
+
+				return true;
+			}
+
+			@Override
+			public boolean visit(final MethodDeclaration methodDeclaration) {
+				// If isZip, only index public methods
+				// For example, Properties.LineType.readLine - LineType class isn't public, so cannot access this method
+				// TODO: also need to confirm that class is public
+				// TODO: what about protected? (though unlikely would be accessing protected fields / methods, so okay for now)
+				// TODO: indicate if method is static
+				// (since static methods can always be accessed, but instance methods require an instance)
+				// For example, if looking for method to "read lines", unlikely to be looking for ImageInputStreamImpl.readLines
+				// Unless there was a valid local variable of this type or a subtype
+				// XXX: need to also include default methods in interfaces
+				// For example, java.io.FileFilter.accept(File)
+				// TODO: when should protected methods be included?
+				if (isZip && !Modifier.isPublic(methodDeclaration.getModifiers())) {
+					return false;
+				}
+
+				String elementName = methodDeclaration.getName().getIdentifier();
+
+				String packageName = DYCEUtilities.getPackageName(compilationUnit);
+				String className = null;
+
+				if (compilationUnit != null) {
+					ASTNode parent = methodDeclaration.getParent();
+
+					if (parent instanceof AbstractTypeDeclaration) {
+						className = ((AbstractTypeDeclaration) parent).getName().getIdentifier();
+					}
+				}
+
+				if (!isZip) {
+					IMethodBinding binding = methodDeclaration.resolveBinding();
+					if (binding != null) {
+						if (!isZip) {
+							// TODO: need to add classpath so can resolve binding
+							//							System.out.println(methodDeclaration.getName() + "\t" + methodDeclaration.resolveBinding());
+						}
+					}
+				}
+
+				String type = "Method " + elementName;
+
+				if (Modifier.isStatic(methodDeclaration.getFlags())) {
+					type = "Static " + type;
+				}
+
+				List<Document> documents = new ArrayList<>();
+				Document document = createDocument(path, packageName, className, elementName, compilationUnit,
+						methodDeclaration.getName(), type);
+				// TODO: also include className (might want to add to createDocument method)
+				// (handle nested classes)
+				documents.add(document);
+
+				if (!isZip) {
+					@SuppressWarnings("unchecked")
+					List<SingleVariableDeclaration> parameters = methodDeclaration.parameters();
+
+					for (SingleVariableDeclaration parameter : parameters) {
+						// TODO: keep track of type, so that can use the info
+						// TODO: keep track if final / effectively final (variable binding has this info)
+						Document parameterDocument = createDocument(path, packageName, className, elementName,
+								compilationUnit, parameter.getName(),
+								"Parameter " + parameter.getName().getIdentifier());
+						documents.add(parameterDocument);
+					}
+				}
+
+				if (!indexWriter.isOpen()) {
+					return false;
+				}
+
+				try {
+					indexWriter.addDocuments(documents);
+				} catch (IOException e) {
 					// TODO Auto-generated catch block
 					//					e.printStackTrace();
+				}
+
+				return true;
+			}
+
+			@Override
+			public boolean visit(final MethodInvocation node) {
+				if (isZip) {
+					return true;
+				}
+
+				IMethodBinding methodBinding = node.resolveMethodBinding();
+
+				if (methodBinding != null) {
+					//					System.out.println(node + "\t" + methodBinding);
 				}
 
 				return true;
@@ -737,6 +765,49 @@ public class DYCEIndexer {
 		};
 
 		astNode.accept(visitor);
+	}
+
+	/**
+	 *
+	 * @param path
+	 * @param packageName the package name (may be <code>null</code>)
+	 * @param className the class name (may be <code>null</code>)
+	 * @param element element (such as method name)
+	 * @param compilationUnit (may be <code>null</code> if shouldn't include line info)
+	 * @param node the ASTNode used to get line number information
+	 * @return
+	 */
+	private static Document createDocument(final Path path, final String packageName, final String className,
+			final String element, final CompilationUnit compilationUnit, final ASTNode node, final String type) {
+		Document document = new Document();
+
+		String pathString = path.toString();
+		String filename = path.getFileName().toString();
+
+		document.add(new StringField(FULL_PATH_FIELD, pathString, Field.Store.YES));
+
+		// Index path with normal parser, so can search path
+		// (don't store, since value is already stored as part of fullpath)
+		document.add(new TextField(PATH_FIELD, pathString, Field.Store.NO));
+		document.add(new TextField("file", filename, Field.Store.YES));
+		document.add(new TextField("element", element, Field.Store.YES));
+		document.add(new TextField("type", type, Field.Store.YES));
+
+		if (compilationUnit != null) {
+			int lineNumber = compilationUnit.getLineNumber(node.getStartPosition());
+			document.add(new IntPoint("line", lineNumber));
+			document.add(new StoredField("line", lineNumber));
+		}
+
+		if (packageName != null) {
+			document.add(new TextField("package", packageName, Field.Store.YES));
+		}
+
+		if (className != null) {
+			document.add(new TextField("class", className, Field.Store.YES));
+		}
+
+		return document;
 	}
 
 	@NonNullByDefault

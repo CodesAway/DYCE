@@ -1,61 +1,60 @@
 package info.codesaway.dyce;
 
 import java.util.Objects;
-import java.util.Optional;
 
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.queryparser.flexible.standard.config.StandardQueryConfigHandler.Operator;
-import org.apache.lucene.search.Query;
-import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.Nullable;
 
 public class DYCESearch {
 	private final String text;
-	private final long delay;
-	private final boolean shouldSelectFirstResult;
+	//	private final long delay;
+	//	private final boolean shouldSelectFirstResult;
 	private final int hitLimit;
-	private final Optional<Query> extraQuery;
+	//	private final Optional<Query> extraQuery;
 	private final DYCESearcher searcher;
 	private final Operator defaultOperator;
-	private final boolean shouldIncludeComments;
+	//	private final boolean shouldIncludeComments;
 	// Comment
 
-	public DYCESearch(final String text, final long delay, final boolean shouldSelectFirstResult, final int hitLimit,
-			final Optional<Query> extraQuery, final DYCESearcher searcher, final Operator defaultOperator,
-			final boolean shouldIncludeComments) {
+	//	public DYCESearch(final String text, final long delay, final boolean shouldSelectFirstResult, final int hitLimit,
+	//			final Optional<Query> extraQuery, final DYCESearcher searcher, final Operator defaultOperator,
+	//			final boolean shouldIncludeComments) {
+	public DYCESearch(final String text, final int hitLimit, final DYCESearcher searcher,
+			final Operator defaultOperator) {
 		this.text = text;
-		this.delay = delay;
-		this.shouldSelectFirstResult = shouldSelectFirstResult;
+		//		this.delay = delay;
+		//		this.shouldSelectFirstResult = shouldSelectFirstResult;
 		this.hitLimit = hitLimit;
-		this.extraQuery = extraQuery;
+		//		this.extraQuery = extraQuery;
 		this.searcher = searcher;
 		this.defaultOperator = defaultOperator;
-		this.shouldIncludeComments = shouldIncludeComments;
+		//		this.shouldIncludeComments = shouldIncludeComments;
 	}
 
 	public String getText() {
 		return this.text;
 	}
 
-	public long getDelay() {
-		return this.delay;
-	}
+	//	public long getDelay() {
+	//		return this.delay;
+	//	}
 
-	public boolean hasDelay() {
-		return this.getDelay() != 0;
-	}
+	//	public boolean hasDelay() {
+	//		return this.getDelay() != 0;
+	//	}
 
-	public boolean shouldSelectFirstResult() {
-		return this.shouldSelectFirstResult;
-	}
+	//	public boolean shouldSelectFirstResult() {
+	//		return this.shouldSelectFirstResult;
+	//	}
 
 	public int getHitLimit() {
 		return this.hitLimit;
 	}
 
-	public Optional<Query> getExtraQuery() {
-		return this.extraQuery;
-	}
+	//	public Optional<Query> getExtraQuery() {
+	//		return this.extraQuery;
+	//	}
 
 	public DYCESearcher getSearcher() {
 		return this.searcher;
@@ -76,14 +75,15 @@ public class DYCESearch {
 		}
 	}
 
-	public boolean shouldIncludeComments() {
-		return this.shouldIncludeComments;
-	}
+	//	public boolean shouldIncludeComments() {
+	//		return this.shouldIncludeComments;
+	//	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(this.extraQuery, this.hitLimit, this.text, this.searcher, this.defaultOperator,
-				this.shouldIncludeComments);
+		return Objects.hash(this.hitLimit, this.text, this.searcher, this.defaultOperator);
+		//		return Objects.hash(this.extraQuery, this.hitLimit, this.text, this.searcher, this.defaultOperator,
+		//				this.shouldIncludeComments);
 	}
 
 	@Override
@@ -98,21 +98,25 @@ public class DYCESearch {
 			return false;
 		}
 		DYCESearch other = (DYCESearch) obj;
-		return Objects.equals(this.extraQuery, other.extraQuery) && this.hitLimit == other.hitLimit
+		return this.hitLimit == other.hitLimit
 				&& Objects.equals(this.text, other.text) && Objects.equals(this.searcher, other.searcher)
-				&& this.defaultOperator == other.defaultOperator
-				&& this.shouldIncludeComments == other.shouldIncludeComments;
+				&& this.defaultOperator == other.defaultOperator;
+		//				&& this.shouldIncludeComments == other.shouldIncludeComments;
+		//		return Objects.equals(this.extraQuery, other.extraQuery) && this.hitLimit == other.hitLimit
+		//				&& Objects.equals(this.text, other.text) && Objects.equals(this.searcher, other.searcher)
+		//				&& this.defaultOperator == other.defaultOperator
+		//				&& this.shouldIncludeComments == other.shouldIncludeComments;
 	}
 
-	@Override
-	public String toString() {
-		@NonNull
-		@SuppressWarnings("null")
-		String toString = String.format(
-				"DYCE Searching top %d hits for %s%s (%s; defaultOperator = %s; includeComments = %s)", this.hitLimit,
-				this.text, this.extraQuery.isPresent() ? " with extra query " + this.extraQuery.get() : "",
-				this.searcher.getIndexPath(), this.defaultOperator, this.shouldIncludeComments);
-
-		return toString;
-	}
+	//	@Override
+	//	public String toString() {
+	//		@NonNull
+	//		@SuppressWarnings("null")
+	//		String toString = String.format(
+	//				"DYCE Searching top %d hits for %s%s (%s; defaultOperator = %s; includeComments = %s)", this.hitLimit,
+	//				this.text, this.extraQuery.isPresent() ? " with extra query " + this.extraQuery.get() : "",
+	//				this.searcher.getIndexPath(), this.defaultOperator, this.shouldIncludeComments);
+	//
+	//		return toString;
+	//	}
 }

@@ -25,7 +25,9 @@ Bundle-ClassPath: .,
  lib/lucene-analyzers-common-8.3.1.jar,
  lib/lucene-core-8.3.1.jar,
  lib/lucene-queries-8.3.1.jar,
- lib/lucene-queryparser-8.3.1.jar
+ lib/lucene-queryparser-8.3.1.jar,
+ lib/becr.jar,
+ lib/bex.jar
 Export-Package: info.codesaway.dyce,
  info.codesaway.dyce.indexer,
  info.codesaway.dyce.jobs,

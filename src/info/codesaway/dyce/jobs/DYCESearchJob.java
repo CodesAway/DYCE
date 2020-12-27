@@ -13,7 +13,6 @@ import java.util.Map;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.queryparser.classic.MultiFieldQueryParser;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.flexible.core.QueryNodeException;
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser;
@@ -113,75 +112,76 @@ public class DYCESearchJob extends Job {
 
 		// searchJob.cancel();
 
-		boolean scheduleNewSearch;
+		//		boolean scheduleNewSearch;
 
 		// Compare current search with new search to see if should cancel
 		// current search
-		if (newSearch.getDelay() == 0) {
-			// Run new search with no delay (such as if pressed enter)
-			// (always rerun search, since even if identical, may have indexed
-			// additional files)
-			// Could also have changed hitLimit (for example, pressed CTRL +
-			// Enter instead of just ENTER)
-			scheduleNewSearch = true;
-		} else if (this.currentSearch == null) {
-			// No current search, so run new search;
-			scheduleNewSearch = true;
-		} else if (newSearch.equals(this.currentSearch)) {
-			// Running same search, ignore
-			// (can ignore since if new search has no delay, earlier "else if"
-			// would say to schedule the new search
-			// System.out.println("Same search: " + newSearch);
+		//		if (newSearch.getDelay() == 0) {
+		//			// Run new search with no delay (such as if pressed enter)
+		//			// (always rerun search, since even if identical, may have indexed
+		//			// additional files)
+		//			// Could also have changed hitLimit (for example, pressed CTRL +
+		//			// Enter instead of just ENTER)
+		//			scheduleNewSearch = true;
+		//		} else if (this.currentSearch == null) {
+		//			// No current search, so run new search;
+		//			scheduleNewSearch = true;
+		//		} else if (newSearch.equals(this.currentSearch)) {
+		//			// Running same search, ignore
+		//			// (can ignore since if new search has no delay, earlier "else if"
+		//			// would say to schedule the new search
+		//			// System.out.println("Same search: " + newSearch);
+		//
+		//			scheduleNewSearch = false;
+		//			// System.out.println("Ignore search");
+		//
+		//			// TODO: if search location changes or if settings change, should
+		//			// search again (change option in dropdown)
+		//
+		//		} else if (newSearch.getText().equals(this.currentSearch.getText())) {
+		//
+		//			// Different search, but same text
+		//			// System.out.println("Different search, but same text: " +
+		//			// newSearch);
+		//			// New search has a delay (otherwise earlier "else if" would
+		//			// schedule the new search
+		//
+		//			if (newSearch.getExtraQuery().isPresent() && this.currentSearch.getExtraQuery().isPresent()
+		//					&& !newSearch.getExtraQuery().equals(this.currentSearch.getExtraQuery())) {
+		//				// Uncommon scenario where user switches to a new tab while on
+		//				// incremental search and pastes the same text as the prior
+		//				// search
+		//				// In this case, it's a delayed search (since entered wasn't
+		//				// pressed)
+		//				// It's the same text, but a different tab
+		//				// So, incremental search may have different results since the
+		//				// tab changed
+		//				// System.out.println("Different tab for " + newSearch);
+		//				scheduleNewSearch = true;
+		//			} else {
+		//				// System.out.println("Ignore search");
+		//				scheduleNewSearch = false;
+		//			}
+		//		} else {
+		//			// Searching is different
+		//			// (cancel current job so new one can run)
+		//			// System.out.println("New search: " + newSearch);
+		//
+		//			scheduleNewSearch = true;
+		//		}
 
-			scheduleNewSearch = false;
-			// System.out.println("Ignore search");
-
-			// TODO: if search location changes or if settings change, should
-			// search again (change option in dropdown)
-
-		} else if (newSearch.getText().equals(this.currentSearch.getText())) {
-
-			// Different search, but same text
-			// System.out.println("Different search, but same text: " +
-			// newSearch);
-			// New search has a delay (otherwise earlier "else if" would
-			// schedule the new search
-
-			if (newSearch.getExtraQuery().isPresent() && this.currentSearch.getExtraQuery().isPresent()
-					&& !newSearch.getExtraQuery().equals(this.currentSearch.getExtraQuery())) {
-				// Uncommon scenario where user switches to a new tab while on
-				// incremental search and pastes the same text as the prior
-				// search
-				// In this case, it's a delayed search (since entered wasn't
-				// pressed)
-				// It's the same text, but a different tab
-				// So, incremental search may have different results since the
-				// tab changed
-				// System.out.println("Different tab for " + newSearch);
-				scheduleNewSearch = true;
-			} else {
-				// System.out.println("Ignore search");
-				scheduleNewSearch = false;
-			}
-		} else {
-			// Searching is different
-			// (cancel current job so new one can run)
-			// System.out.println("New search: " + newSearch);
-
-			scheduleNewSearch = true;
-		}
-
-		if (scheduleNewSearch) {
-			this.cancel();
-			this.schedule(newSearch);
-		}
+		//		if (scheduleNewSearch) {
+		this.cancel();
+		this.schedule(newSearch);
+		//		}
 	}
 
 	private void schedule(final DYCESearch search) {
 		this.currentSearch = search;
 		this.searchAfter = null;
 
-		this.schedule(search.getDelay());
+		this.schedule(0);
+		//		this.schedule(search.getDelay());
 	}
 
 	@Override
@@ -230,15 +230,15 @@ public class DYCESearchJob extends Job {
 					this.view.setResults(resultsList);
 
 					if (!resultsList.isEmpty()) {
-						if (this.currentSearch.shouldSelectFirstResult()) {
-							this.view.selectAndRevealTopResult();
-						} else {
-							// Show top of results (since if at end when ran
-							// last query, would likely want
-							// to see the top result when perform a search)
-							// Don't want to select item, just want to reveal it
-							this.view.revealTopResult();
-						}
+						//						if (this.currentSearch.shouldSelectFirstResult()) {
+						//							this.view.selectAndRevealTopResult();
+						//						} else {
+						// Show top of results (since if at end when ran
+						// last query, would likely want
+						// to see the top result when perform a search)
+						// Don't want to select item, just want to reveal it
+						this.view.revealTopResult();
+						//						}
 					}
 
 					//				this.view.setLastSearchDoneTime(System.currentTimeMillis());
@@ -324,16 +324,16 @@ public class DYCESearchJob extends Job {
 
 			standardQueryParser.setPointsConfigMap(pointsConfigMap);
 
-			Query query;
-			if (search.shouldIncludeComments()) {
-				MultiFieldQueryParser multiFieldQueryParser = new MultiFieldQueryParser(CONTENT_AND_COMMENT_FIELDS,
-						analyzer);
-				multiFieldQueryParser.setDefaultOperator(search.getClassicDefaultOperator());
-
-				query = multiFieldQueryParser.parse(search.getText());
-			} else {
-				query = standardQueryParser.parse(search.getText(), "content");
-			}
+			//			Query query;
+			//			if (search.shouldIncludeComments()) {
+			//				MultiFieldQueryParser multiFieldQueryParser = new MultiFieldQueryParser(CONTENT_AND_COMMENT_FIELDS,
+			//						analyzer);
+			//				multiFieldQueryParser.setDefaultOperator(search.getClassicDefaultOperator());
+			//
+			//				query = multiFieldQueryParser.parse(search.getText());
+			//			} else {
+			Query query = standardQueryParser.parse(search.getText(), "content");
+			//			}
 
 			// Set commented out lines as lower priority
 			// (whereas Javadoc keeps the same priority)
@@ -353,9 +353,9 @@ public class DYCESearchJob extends Job {
 					.add(new BoostQuery(commentedOutQuery, 0.5f), BooleanClause.Occur.SHOULD)
 					.add(new BoostQuery(lowPriorityQuery, 0.75f), BooleanClause.Occur.SHOULD);
 
-			if (search.getExtraQuery().isPresent()) {
-				builder.add(search.getExtraQuery().get(), BooleanClause.Occur.SHOULD);
-			}
+			//			if (search.getExtraQuery().isPresent()) {
+			//				builder.add(search.getExtraQuery().get(), BooleanClause.Occur.SHOULD);
+			//			}
 
 			BooleanQuery booleanQuery = builder.build();
 
@@ -455,18 +455,19 @@ public class DYCESearchJob extends Job {
 			for (ScoreDoc sd : hits.scoreDocs) {
 				Document d = searcher.doc(sd.doc);
 				String path = d.get(FULL_PATH_FIELD);
+				String packageName = d.get("package");
+				String className = d.get("class");
 				String file = d.get("file");
 				String element = d.get("element");
 				String line = d.get("line");
 				String type = d.get("type");
-				// String date = d.get("date");
-				String content = d.get("content");
-				String extension = d.get("ext");
 
-				if (content != null) {
-					content = content.trim();
-				} else {
-					content = "";
+				if (packageName == null) {
+					packageName = "";
+				}
+
+				if (className == null) {
+					className = "";
 				}
 
 				if (element == null) {
@@ -477,27 +478,10 @@ public class DYCESearchJob extends Job {
 					type = "";
 				}
 
-				String comment = d.get("comment");
-
-				if (comment != null && !comment.isEmpty()) {
-					// Show comment text after the content
-					// (so can focus attention on the content first)
-					content = content + " " + comment;
-				}
-
 				resultIndex++;
 
-				results.add(
-						new DYCESearchResultEntry(resultIndex, file, element, line, content, type, path, extension));
-
-				// if (isTesting && type != null) {
-				// System.out.println("Type: " + type);
-				// }
-
-				// System.out.printf("%sFound match in (%s:%s)%s - %s%n", type
-				// != null ? "(" + type + ") " : "", file, line,
-				// date != null ? " for " + date : "",
-				// path);
+				results.add(new DYCESearchResultEntry(resultIndex, packageName, className, file, element, line, type,
+						path));
 			}
 		} finally {
 			searcherManager.release(searcher);

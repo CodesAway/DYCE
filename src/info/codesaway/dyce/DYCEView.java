@@ -1,5 +1,14 @@
 package info.codesaway.dyce;
 
+import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.convertLineTextToSentence;
+import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.convertSentenceToCode;
+import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.determineClassName;
+import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.determineVariableName;
+import static info.codesaway.dyce.util.EclipseUtilities.getActiveDocument;
+import static info.codesaway.dyce.util.EclipseUtilities.getActivePathname;
+import static info.codesaway.dyce.util.EclipseUtilities.getDocumentLine;
+import static info.codesaway.dyce.util.EclipseUtilities.insertText;
+
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -12,17 +21,16 @@ import javax.annotation.PostConstruct;
 
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.flexible.standard.config.StandardQueryConfigHandler.Operator;
-import org.apache.lucene.search.Query;
-import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IResourceChangeEvent;
 import org.eclipse.core.resources.IResourceChangeListener;
 import org.eclipse.core.resources.IResourceDelta;
-import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.eclipse.jface.text.BadLocationException;
+import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.viewers.ArrayContentProvider;
 import org.eclipse.jface.viewers.ColumnLabelProvider;
 import org.eclipse.jface.viewers.DelegatingStyledCellLabelProvider;
@@ -43,16 +51,11 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableColumn;
-import org.eclipse.ui.IEditorInput;
-import org.eclipse.ui.IEditorPart;
-import org.eclipse.ui.IWorkbench;
-import org.eclipse.ui.IWorkbenchPage;
-import org.eclipse.ui.IWorkbenchPart;
-import org.eclipse.ui.IWorkbenchWindow;
-import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.model.WorkbenchLabelProvider;
 import org.eclipse.ui.part.ViewPart;
 
+import info.codesaway.bex.Indexed;
+import info.codesaway.dyce.grammar.DYCEGrammarUtilities;
 import info.codesaway.dyce.indexer.DYCEIndexer;
 import info.codesaway.dyce.jobs.DYCEIndexJob;
 import info.codesaway.dyce.jobs.DYCESearchJob;
@@ -310,15 +313,15 @@ public class DYCEView extends ViewPart {
 		// TODO: calculate width based on available space
 
 		this.createTableViewerColumn("#", 50, DYCESearchResultEntry::getResultNumber);
-		this.createTableViewerColumn("File", 250, DYCESearchResultEntry::getFile);
+		this.createTableViewerColumn("Package", 250, DYCESearchResultEntry::getPackageName);
+		this.createTableViewerColumn("Class", 150, DYCESearchResultEntry::getClassName);
 		this.createTableViewerColumn("Element", 250, DYCESearchResultEntry::getElement);
 		this.createTableViewerColumn("Line", 65, DYCESearchResultEntry::getLine);
 		// Put type before content, since can use type for quick understanding
 		// of line
 		this.createTableViewerColumn("Type", 250, DYCESearchResultEntry::getType);
-		this.createStyledTableViewerColumn("Content", 750, DYCEView::getStyledContent);
-		// this.createTableViewerColumn("Content", 500,
-		// CASTLESearchResultEntry::getContent);
+		//		this.createStyledTableViewerColumn("Content", 750, DYCEView::getStyledContent);
+		this.createTableViewerColumn("File", 250, DYCESearchResultEntry::getFile);
 		this.createTableViewerColumn("Path", 1000, DYCESearchResultEntry::getPath);
 	}
 
@@ -376,6 +379,90 @@ public class DYCEView extends ViewPart {
 		case SWT.CR:
 		case SWT.KEYPAD_CR:
 		case SWT.F5:
+			// Good test case since actual webContext variable name as well as webCtx, depending on scope
+			// Only should be checking variables in scope
+			//			determineVariableName("web context");
+			// TODO: testing in static block of BaseAction
+			// Why can't it find the correct variable with just "context"?
+			// Why can't it find the DEBUG field?
+			determineVariableName("list");
+
+			if (true) {
+				return;
+			}
+
+			//			determineVariableName("name context");
+			//			determineVariableName("debug");
+			//			determineVariableName("request");
+			//			determineVariableName("event");
+			//			determineVariableName("parameters");
+			//			determineVariableName("string");
+			//			determineVariableName("int");
+			//			determineVariableName("message");
+			//			determineVariableName("console message");
+			//			determineVariableName("request message");
+			//			determineVariableName("request messages");
+			//			determineVariableName("error");
+
+			//			determineClassName("error message");
+			//			determineClassName("err mess");
+			//			determineClassName("information message");
+			//			determineClassName("service manager");
+			//			determineClassName("action for");
+			//			determineClassName("action ward");
+			// Usually matches ActionForm, but really close also to ActionForward
+			//			determineClassName("action word");
+			//			determineClassName("tee map");
+			//			determineClassName("action for word");
+			//			determineClassName("action for ward");
+			//			determineClassName("naming");
+			//			determineClassName("Servlet");
+			//			determineClassName("message list");
+			//			determineClassName("list message");
+			// Action is part of impors, but there's also a BaseAction class which is a perfect match
+			//			determineClassName("base action");
+			//			determineClassName("maintain");
+			determineClassName("comment out");
+			//			determineClassName("comment");
+
+			// 7 * 0.75 + 6 + 21
+			String text = this.getText();
+
+			// TODO: try to search using query
+			// If find results, then perform search and don't try to insert text
+			if (!text.isEmpty()) {
+				String codeResult = DYCEGrammarUtilities.convertSentenceToCode(text);
+				insertText(codeResult);
+			}
+
+			Indexed<Optional<String>> activePathname = getActivePathname();
+
+			if (activePathname.getValue().isPresent()) {
+				String pathname = activePathname.getValue().get();
+				int currentLine = activePathname.getIndex();
+
+				System.out.printf("In %s on line %d%n", pathname, currentLine);
+				Optional<IDocument> optionalDocument = getActiveDocument();
+
+				if (optionalDocument.isPresent()) {
+					// Subtract 1 since document's lines start with 0 whereas UI start with 1
+					int documentLine = currentLine - 1;
+					IDocument document = optionalDocument.get();
+					try {
+						//						String currentLineText = DYCEUtilities.getDocumentLine(document, documentLine);
+						//						System.out.println("Current line: " + currentLineText);
+
+						String sentence = convertLineTextToSentence(document, documentLine);
+						String code = convertSentenceToCode(sentence);
+
+						if (code.trim().equals(getDocumentLine(document, documentLine).trim())) {
+							System.out.println("Great job!");
+						}
+					} catch (BadLocationException e1) {
+					}
+				}
+			}
+
 			this.searchText.selectAll();
 			//			this.outputMethods();
 
@@ -386,33 +473,28 @@ public class DYCEView extends ViewPart {
 			//				hitLimit = DEFAULT_INCREMENTAL_HIT_LIMIT;
 			//			}
 
-			this.search(0, false, hitLimit);
+			//			this.search(0, false, hitLimit);
+			this.search(hitLimit);
 			return;
 		}
 	}
 
-	/**
-	 *
-	 *
-	 * @param delay
-	 *            the delay to which before starting the search (enter 0 to
-	 *            search immediately)
-	 */
-	public void search(final long delay, final boolean shouldSelectFirstResult, final int hitLimit) {
-		this.search(delay, shouldSelectFirstResult, hitLimit, Optional.empty());
-		//		this.search(delay, shouldSelectFirstResult, hitLimit, this.getExtraQuery(this.isIncrementalSearch()));
-	}
+	//	/**
+	//	 *
+	//	 *
+	//	 * @param delay
+	//	 *            the delay to which before starting the search (enter 0 to
+	//	 *            search immediately)
+	//	 */
+	//	public void search(final long delay, final boolean shouldSelectFirstResult, final int hitLimit) {
+	//		this.search(delay, shouldSelectFirstResult, hitLimit, Optional.empty());
+	//		//		this.search(delay, shouldSelectFirstResult, hitLimit, this.getExtraQuery(this.isIncrementalSearch()));
+	//	}
 
-	/**
-	 *
-	 *
-	 * @param delay
-	 *            the delay to which before starting the search (enter 0 to
-	 *            search immediately)
-	 */
 	@NonNullByDefault
-	public void search(final long delay, final boolean shouldSelectFirstResult, final int hitLimit,
-			final Optional<Query> extraQuery) {
+	public void search(final int hitLimit) {
+		//	public void search(final long delay, final boolean shouldSelectFirstResult, final int hitLimit,
+		//			final Optional<Query> extraQuery) {
 		//		DYCESearcher searcher = DYCESettings.getSearcher(this.comboDropDown.getText());
 		DYCESearcher searcher = DYCESettings.getSearcherWorkspace();
 
@@ -431,12 +513,14 @@ public class DYCEView extends ViewPart {
 		//		System.out.println("Search for " + text);
 
 		Operator defaultOperator = Operator.AND;
-		boolean shouldIncludeComments = false;
+		//		boolean shouldIncludeComments = false;
 		//		Operator defaultOperator = this.getDefaultOperator();
 		//		boolean shouldIncludeComments = this.shouldIncludeComments();
 
-		DYCESearch search = new DYCESearch(text, delay, shouldSelectFirstResult, hitLimit, extraQuery, searcher,
-				defaultOperator, shouldIncludeComments);
+		DYCESearch search = new DYCESearch(text, hitLimit, searcher, defaultOperator);
+
+		//		DYCESearch search = new DYCESearch(text, delay, shouldSelectFirstResult, hitLimit, extraQuery, searcher,
+		//				defaultOperator, shouldIncludeComments);
 
 		// Determines whether to run the current search or the new search
 		searchJob.handleSearch(search);
@@ -506,64 +590,6 @@ public class DYCEView extends ViewPart {
 	//			}
 	//		}
 	//	}
-
-	//	@NonNullByDefault
-	@SuppressWarnings({ "null" })
-	public Optional<String> getActivePathname() {
-		// https://stackoverflow.com/a/17901551/12610042
-		IWorkbench wb = PlatformUI.getWorkbench();
-		IWorkbenchWindow window = wb.getActiveWorkbenchWindow();
-
-		if (window == null) {
-			return Optional.empty();
-		}
-
-		IWorkbenchPage page = window.getActivePage();
-
-		if (page == null) {
-			return Optional.empty();
-		}
-
-		IWorkbenchPart workbenchPart = page.getActivePart();
-
-		if (workbenchPart == null) {
-			return Optional.empty();
-		}
-
-		IEditorPart editorPart = workbenchPart.getSite().getPage().getActiveEditor();
-
-		if (editorPart == null) {
-			return Optional.empty();
-		}
-
-		IEditorInput editorInput = editorPart.getEditorInput();
-
-		if (editorInput == null) {
-			return Optional.empty();
-		}
-
-		//		@Nullable
-		IFile iFile = editorInput.getAdapter(IFile.class);
-
-		// Not dead code, getAdapter says NonNull,
-		// but Javadoc says can return null
-		if (iFile == null) {
-			return Optional.empty();
-		}
-
-		// System.out.println("Location: " + iFile.getLocation().toFile());
-
-		// Get absolute path
-		IPath iPath = iFile.getLocation();
-
-		if (iPath == null) {
-			return Optional.empty();
-		}
-
-		return Optional.of(iPath.toFile().toString());
-
-		// return Optional.of(iFile.toString());
-	}
 
 	private void createSearchText(final Composite parent) {
 		this.searchText = new StyledText(parent, SWT.BORDER | SWT.SEARCH | SWT.SINGLE);
@@ -694,6 +720,7 @@ public class DYCEView extends ViewPart {
 		}
 	}
 
+	/*
 	private static StyledString getStyledContent(final DYCESearchResultEntry entry) {
 		// TODO: how to prevent meta documents from being returned in results
 		// TODO: replace tabs with spaces in content (since tabs don't seem to
@@ -733,6 +760,7 @@ public class DYCEView extends ViewPart {
 		//
 		// result.append(entry.getContent(), JAVA_STRING_STYLER);
 	}
+	*/
 
 	public String getStatus() {
 		//		if (this.statusLabel.isDisposed()) {
