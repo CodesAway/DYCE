@@ -3,7 +3,7 @@ package info.codesaway.dyce;
 import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.convertLineTextToSentence;
 import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.convertSentenceToCode;
 import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.determineClassName;
-import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.determineVariableName;
+import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.determineCodeForSentence;
 import static info.codesaway.dyce.util.EclipseUtilities.getActiveDocument;
 import static info.codesaway.dyce.util.EclipseUtilities.getActivePathname;
 import static info.codesaway.dyce.util.EclipseUtilities.getDocumentLine;
@@ -379,13 +379,14 @@ public class DYCEView extends ViewPart {
 		case SWT.CR:
 		case SWT.KEYPAD_CR:
 		case SWT.F5:
+
 			// Good test case since actual webContext variable name as well as webCtx, depending on scope
 			// Only should be checking variables in scope
 			//			determineVariableName("web context");
 			// TODO: testing in static block of BaseAction
 			// Why can't it find the correct variable with just "context"?
 			// Why can't it find the DEBUG field?
-			determineVariableName("list");
+			determineCodeForSentence(this.getText());
 
 			if (true) {
 				return;

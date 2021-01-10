@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -74,6 +75,8 @@ public final class DYCEGrammarUtilities {
 	private DYCEGrammarUtilities() {
 		throw new UnsupportedOperationException();
 	}
+
+	private static boolean DEBUG = false;
 
 	private static final ThreadLocal<Matcher> COMBINE_CAPS = Pattern
 			.getThreadLocalMatcher(" (?<!\\b(?i:set|set to|as|declare|assign|of) )(?=[A-Z])");
@@ -192,8 +195,6 @@ public final class DYCEGrammarUtilities {
 
 		BEXString bexString = documentBexString.substring(range);
 
-		System.out.println("BEXString: " + bexString);
-
 		for (DYCEGrammarRule grammarRule : grammarRules) {
 			if (!grammarRule.accept(bexString)) {
 				continue;
@@ -202,13 +203,79 @@ public final class DYCEGrammarUtilities {
 			String result = grammarRule.replace(bexString);
 			bexString = new BEXString(result, BEXParsingLanguage.TEXT);
 			// TODO: change abbreviated forms, such as "acct" to logical form, account
-			System.out.println(result);
+			if (DEBUG) {
+				System.out.println(result);
+			}
 		}
 
-		System.out.println("Final result: " + bexString);
+		if (DEBUG) {
+			System.out.println("Final result: " + bexString);
+		}
 		return bexString.getText();
 	}
 
+	private static final Pattern SPACE_PATTERN = Pattern.compile("\\s++");
+	private static final ThreadLocal<Matcher> SPACE_MATCHER = new ThreadLocal<Matcher>()
+			.withInitial(() -> SPACE_PATTERN.matcher());
+
+	public static String determineCodeForSentence(final String text) {
+		String[] words = SPACE_PATTERN.split(text);
+
+		System.out.println("Words:");
+		Arrays.stream(words).forEach(System.out::println);
+
+		if (words.length == 0) {
+			return "";
+		}
+
+		// For each word determine the following
+		// 1) Is it a variable name / class name / method name
+		// 2) Is it a new name or part of the current name
+
+		int wordIndex = 0;
+		String word = words[wordIndex];
+
+		// Check first word
+
+		List<VariableScope> possibleVariables = determinePossibleVariables();
+		VariableMatch variableMatch = determineVariableName(word, possibleVariables);
+
+		if (variableMatch.isMatch()) {
+
+			wordIndex++;
+			System.out.printf("%s %s%n", variableMatch.getScore(), variableMatch.getCode());
+			IVariableBinding binding = variableMatch.getBinding();
+
+			if (binding != null) {
+				ITypeBinding type = binding.getType();
+				Collection<IMethodBinding> methods = determineMethodsForType(type);
+
+				//				methods.forEach(System.out::println);
+
+				// Check next word to see if part of variable name
+				if (words.length > wordIndex) {
+					word = words[wordIndex];
+				}
+
+				// Check next word to see if invoking method
+				if (words.length > wordIndex) {
+					word = words[wordIndex];
+
+					Stream<String> suggestions = methods.stream()
+							.map(IMethodBinding::getName)
+							.distinct();
+
+					List<Indexed<String>> similarity = determineSimilarity(suggestions, word, true);
+					System.out.println("Similar methods: ");
+					similarity.forEach(System.out::println);
+				}
+			}
+		}
+
+		return "";
+	}
+
+	// TODO: may not be needed / refactored, since first want to determine the code based on variable / method names
 	public static String convertSentenceToCode(final String text) {
 
 		String normalizedText = text.trim();
@@ -318,21 +385,18 @@ public final class DYCEGrammarUtilities {
 		return result;
 	}
 
-	public static String determineVariableName(final String variableNameText) {
-		// TODO: refactor this and determineClassName, so can get imports and variable names at once
-		// (so don't need to parse twice)
-		System.out.println("Determine variable name: " + variableNameText);
+	public static List<VariableScope> determinePossibleVariables() {
 		Indexed<Optional<String>> activePathname = getActivePathname();
 
 		if (!activePathname.getValue().isPresent()) {
-			// Cannot determine Active file, so just return the passed text
-			return variableNameText;
+			// Cannot determine Active file
+			return Collections.emptyList();
 		}
 
 		DocumentSelection documentSelection = getDocumentSelection();
 
 		if (!documentSelection.hasOffset()) {
-			return variableNameText;
+			return Collections.emptyList();
 		}
 
 		ASTNode astNode;
@@ -340,12 +404,12 @@ public final class DYCEGrammarUtilities {
 			astNode = DYCEUtilities.createAST(Paths.get(activePathname.getValue().get()));
 		} catch (IOException e) {
 			// If cannot read the file (should never happen), just return the passed text
-			return variableNameText;
+			return Collections.emptyList();
 		}
 
 		if (!(astNode instanceof CompilationUnit)) {
 			// astNode should be a CompilationUnit, since parsed the active file
-			return variableNameText;
+			return Collections.emptyList();
 		}
 
 		CompilationUnit compilationUnit = (CompilationUnit) astNode;
@@ -383,7 +447,7 @@ public final class DYCEGrammarUtilities {
 					String variableName = parameter.getName().getIdentifier();
 					int position = parameter.getName().getStartPosition();
 
-					variables.add(new VariableScope(variableName, position, scope));
+					variables.add(new VariableScope(variableName, position, scope, parameter.resolveBinding()));
 				}
 
 				return true;
@@ -409,28 +473,28 @@ public final class DYCEGrammarUtilities {
 				int position = node.getName().getStartPosition();
 
 				IntRange scope = determinedScope.get();
-				variables.add(new VariableScope(variableName, position, scope));
+				variables.add(new VariableScope(variableName, position, scope, node.resolveBinding()));
 
-				IVariableBinding variableBinding = node.resolveBinding();
-
-				if (variableBinding != null) {
-					// For example, ArrayList doesn't declare stream method (in List interface)
-					System.out.println("Methods for variable " + variableBinding.getName());
-
-					Collection<String> methodNames = determineMethodsForType(variableBinding.getType());
-
-					System.out.println("Method names for variable: " + variableBinding.getName());
-					methodNames.forEach(System.out::println);
-
-					String methodNameText = "steam";
-
-					// Determine similarity
-					List<Indexed<String>> similarMethodNames = determineSimilarity(methodNames.stream(),
-							methodNameText);
-
-					System.out.println("Similar method names: \t" + similarMethodNames.size());
-					similarMethodNames.forEach(System.out::println);
-				}
+				//				IVariableBinding variableBinding = node.resolveBinding();
+				//
+				//				if (variableBinding != null) {
+				//					// For example, ArrayList doesn't declare stream method (in List interface)
+				//					System.out.println("Methods for variable " + variableBinding.getName());
+				//
+				//					Collection<String> methodNames = determineMethodsForType(variableBinding.getType());
+				//
+				//					System.out.println("Method names for variable: " + variableBinding.getName());
+				//					methodNames.forEach(System.out::println);
+				//
+				//					String methodNameText = "steam";
+				//
+				//					// Determine similarity
+				//					List<Indexed<String>> similarMethodNames = determineSimilarity(methodNames.stream(),
+				//							methodNameText);
+				//
+				//					System.out.println("Similar method names: \t" + similarMethodNames.size());
+				//					similarMethodNames.forEach(System.out::println);
+				//				}
 
 				return true;
 			}
@@ -465,32 +529,83 @@ public final class DYCEGrammarUtilities {
 
 		int offset = documentSelection.getOffset();
 
-		Stream<String> suggestions = variables.stream()
+		List<VariableScope> possibleVariables = variables.stream()
 				.filter(v -> v.isInScope(offset))
 				.filter(v -> v.isBeforePosition(offset))
+				.collect(toList());
+
+		return possibleVariables;
+	}
+
+	public static VariableMatch determineVariableName(final String variableNameText) {
+		return determineVariableName(variableNameText, determinePossibleVariables());
+	}
+
+	public static VariableMatch determineVariableName(final String variableNameText,
+			final List<VariableScope> possibleVariables) {
+		// TODO: refactor this and determineClassName, so can get imports and variable names at once
+		// (so don't need to parse twice)
+
+		// TODO: refactor this to determine variables in scope
+		// (that way, can check multiple passes for matches without parsing file again)
+
+		if (DEBUG) {
+			System.out.println("Determine variable name: " + variableNameText);
+		}
+
+		if (possibleVariables.isEmpty()) {
+			return new VariableMatch(variableNameText);
+		}
+
+		Stream<String> suggestions = possibleVariables.stream()
 				.map(VariableScope::getName);
 
 		List<Indexed<String>> similarVariableNames = determineSimilarity(suggestions, variableNameText);
 
-		System.out.println("Similar variable names: \t" + similarVariableNames.size());
-		similarVariableNames.forEach(System.out::println);
+		if (DEBUG) {
+			System.out.println("Similar variable names: \t" + similarVariableNames.size());
+			similarVariableNames.forEach(System.out::println);
+		}
 
 		// TODO: also keep track of the package name, in case need to add import
 		// Also, when giving choices, could show the package name
 		Indexed<String> match = null;
 
 		if (!similarVariableNames.isEmpty()) {
-			System.out.println("Similar variable name:");
-			similarVariableNames.forEach(System.out::println);
+			if (DEBUG) {
+				System.out.println("Similar variable name:");
+				similarVariableNames.forEach(System.out::println);
+			}
 
 			match = similarVariableNames.get(0);
-			System.out.println("Matching variable name: " + match);
+			if (DEBUG) {
+				System.out.println("Matching variable name: " + match);
+			}
 		}
 
-		return variableNameText;
+		if (match == null) {
+			return new VariableMatch(variableNameText);
+		}
+
+		// Added variable for lambda
+		Indexed<String> finalMatch = match;
+
+		Optional<VariableScope> variable = possibleVariables.stream()
+				.filter(v -> v.getName().equals(finalMatch.getValue()))
+				.findFirst();
+
+		IVariableBinding binding = variable.isPresent()
+				? variable.get().getBinding()
+				: null;
+
+		return new VariableMatch(match, binding);
 	}
 
-	protected static Collection<String> determineMethodsForType(final ITypeBinding type) {
+	protected static Collection<IMethodBinding> determineMethodsForType(final ITypeBinding type) {
+		if (type == null) {
+			return Collections.emptyList();
+		}
+
 		// TODO: limit to ones in scope, based on current cursor position
 
 		// TODO: track each type and determine the methods
@@ -501,7 +616,7 @@ public final class DYCEGrammarUtilities {
 		ArrayDeque<ITypeBinding> bindingsToProcess = new ArrayDeque<>();
 		bindingsToProcess.add(type);
 
-		Set<String> methodNames = new TreeSet<>();
+		Set<IMethodBinding> methods = new TreeSet<>(Comparator.comparing(IMethodBinding::getName));
 
 		do {
 			ITypeBinding typeBinding = bindingsToProcess.removeLast();
@@ -534,12 +649,12 @@ public final class DYCEGrammarUtilities {
 					// TODO: only include private, protected, or package protected in certain circumstances
 					// The goal is to only show methods which could be invoked based on the current scope
 					.filter(m -> Modifier.isPublic(m.getModifiers()))
-					.map(IMethodBinding::getName)
-					.forEach(methodNames::add);
+					//					.map(IMethodBinding::getName)
+					.forEach(methods::add);
 
 		} while (!bindingsToProcess.isEmpty());
 
-		return methodNames;
+		return methods;
 	}
 
 	public static String determineClassName(final String classNameText) {
