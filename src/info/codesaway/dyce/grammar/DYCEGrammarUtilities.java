@@ -64,6 +64,7 @@ import info.codesaway.dyce.DYCESearch;
 import info.codesaway.dyce.DYCESearchResult;
 import info.codesaway.dyce.DYCESearchResultEntry;
 import info.codesaway.dyce.DYCESettings;
+import info.codesaway.dyce.grammar.java.JavaChainCodeMatchResult;
 import info.codesaway.dyce.jobs.DYCESearchJob;
 import info.codesaway.dyce.parsing.VariableScope;
 import info.codesaway.dyce.util.DYCEUtilities;
@@ -238,13 +239,16 @@ public final class DYCEGrammarUtilities {
 
 		// Priority query based on the score in descending order (highest score has highest priority)
 		PriorityQueue<CodeMatchResult<CodeMatchInfo>> results = new PriorityQueue<>(
-				Comparator.comparingInt(CodeMatchResult<?>::getScore).reversed());
+				Comparator.comparingInt(CodeMatchResult<CodeMatchInfo>::getScore).reversed());
 
 		// Start with an empty result
-		results.add(CodeMatchResultValue.EMPTY);
+		results.add(JavaChainCodeMatchResult.EMPTY);
 
 		List<VariableScope> possibleVariables = determinePossibleVariables();
 		CodeMatchInfo extraInfo = new CodeMatchInfo();
+
+		PriorityQueue<CodeMatchResult<CodeMatchInfo>> finalResults = new PriorityQueue<>(
+				Comparator.comparingInt(CodeMatchResult<CodeMatchInfo>::getScore).reversed());
 
 		while (!results.isEmpty()) {
 			CodeMatchResult<CodeMatchInfo> result = results.remove();
@@ -253,7 +257,12 @@ public final class DYCEGrammarUtilities {
 
 			if (wordIndex == words.length) {
 				System.out.println("Result is match? " + result.isMatch() + "\t" + result);
-				break;
+
+				if (result.isMatch()) {
+					finalResults.add(result);
+				}
+
+				continue;
 			}
 
 			String word = words[wordIndex];
@@ -272,39 +281,11 @@ public final class DYCEGrammarUtilities {
 			results.add(result.addUnmatchedWord(word));
 		}
 
-		//		VariableMatch variableMatch = determineVariableName(word, possibleVariables);
-		//
-		//		if (variableMatch.isMatch()) {
-		//
-		//			wordIndex++;
-		//			System.out.printf("%s %s%n", variableMatch.getScore(), variableMatch.getCode());
-		//			IVariableBinding binding = variableMatch.getBinding();
-		//
-		//			if (binding != null) {
-		//				ITypeBinding type = binding.getType();
-		//				Collection<IMethodBinding> methods = determineMethodsForType(type);
-		//
-		//				//				methods.forEach(System.out::println);
-		//
-		//				// Check next word to see if part of variable name
-		//				if (words.length > wordIndex) {
-		//					word = words[wordIndex];
-		//				}
-		//
-		//				// Check next word to see if invoking method
-		//				if (words.length > wordIndex) {
-		//					word = words[wordIndex];
-		//
-		//					Stream<String> suggestions = methods.stream()
-		//							.map(IMethodBinding::getName)
-		//							.distinct();
-		//
-		//					List<Indexed<String>> similarity = determineSimilarity(suggestions, word, true);
-		//					System.out.println("Similar methods: ");
-		//					similarity.forEach(System.out::println);
-		//				}
-		//			}
-		//		}
+		System.out.println("Final results:");
+		while (!finalResults.isEmpty()) {
+			CodeMatchResult<CodeMatchInfo> result = finalResults.remove();
+			System.out.printf("%d\t%s%n", result.getScore(), result);
+		}
 
 		return "";
 	}
@@ -635,7 +616,7 @@ public final class DYCEGrammarUtilities {
 		return new VariableMatch(match, binding);
 	}
 
-	protected static Collection<IMethodBinding> determineMethodsForType(final ITypeBinding type) {
+	public static Collection<IMethodBinding> determineMethodsForType(final ITypeBinding type) {
 		if (type == null) {
 			return Collections.emptyList();
 		}
@@ -789,11 +770,11 @@ public final class DYCEGrammarUtilities {
 		return importedClass.getIdentifier();
 	}
 
-	private static List<Indexed<String>> determineSimilarity(final Stream<String> suggestions, final String inputText) {
+	public static List<Indexed<String>> determineSimilarity(final Stream<String> suggestions, final String inputText) {
 		return determineSimilarity(suggestions, inputText, false);
 	}
 
-	private static List<Indexed<String>> determineSimilarity(final Stream<String> suggestions, final String inputText,
+	public static List<Indexed<String>> determineSimilarity(final Stream<String> suggestions, final String inputText,
 			final boolean ignoreDifferences) {
 		return suggestions
 				.map(i -> determineSimilarity(i, inputText, ignoreDifferences))
@@ -809,7 +790,7 @@ public final class DYCEGrammarUtilities {
 	 * @param inputText the inputted text to compare against
 	 * @return the passed inputted text with the "index" being the similarity score
 	 */
-	private static Indexed<String> determineSimilarity(final String suggestion, final String inputText,
+	public static Indexed<String> determineSimilarity(final String suggestion, final String inputText,
 			final boolean ignoreDifferences) {
 		// Use Myers diff to determine corresponding parts
 		// * Preferred over LCS since Myers is better at finding continuous ranges of matching characters
