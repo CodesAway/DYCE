@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.NavigableSet;
 import java.util.Optional;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.IntStream;
@@ -232,45 +233,78 @@ public final class DYCEGrammarUtilities {
 		// 1) Is it a variable name / class name / method name
 		// 2) Is it a new name or part of the current name
 
-		int wordIndex = 0;
-		String word = words[wordIndex];
+		// 1/18/2021 - change logic slightly to handle both questions at once
+		// For each word, Is it a variable name / class name / method name / unmatched word
 
-		// Check first word
+		// Priority query based on the score in descending order (highest score has highest priority)
+		PriorityQueue<CodeMatchResult<CodeMatchInfo>> results = new PriorityQueue<>(
+				Comparator.comparingInt(CodeMatchResult<?>::getScore).reversed());
+
+		// Start with an empty result
+		results.add(CodeMatchResultValue.EMPTY);
 
 		List<VariableScope> possibleVariables = determinePossibleVariables();
-		VariableMatch variableMatch = determineVariableName(word, possibleVariables);
+		CodeMatchInfo extraInfo = new CodeMatchInfo();
 
-		if (variableMatch.isMatch()) {
+		while (!results.isEmpty()) {
+			CodeMatchResult<CodeMatchInfo> result = results.remove();
 
-			wordIndex++;
-			System.out.printf("%s %s%n", variableMatch.getScore(), variableMatch.getCode());
-			IVariableBinding binding = variableMatch.getBinding();
+			int wordIndex = result.getWordCount();
 
-			if (binding != null) {
-				ITypeBinding type = binding.getType();
-				Collection<IMethodBinding> methods = determineMethodsForType(type);
-
-				//				methods.forEach(System.out::println);
-
-				// Check next word to see if part of variable name
-				if (words.length > wordIndex) {
-					word = words[wordIndex];
-				}
-
-				// Check next word to see if invoking method
-				if (words.length > wordIndex) {
-					word = words[wordIndex];
-
-					Stream<String> suggestions = methods.stream()
-							.map(IMethodBinding::getName)
-							.distinct();
-
-					List<Indexed<String>> similarity = determineSimilarity(suggestions, word, true);
-					System.out.println("Similar methods: ");
-					similarity.forEach(System.out::println);
-				}
+			if (wordIndex == words.length) {
+				System.out.println("Result is match? " + result.isMatch() + "\t" + result);
+				break;
 			}
+
+			String word = words[wordIndex];
+
+			System.out.println("Initially: " + result);
+			System.out.println("Word: " + word);
+
+			Collection<CodeMatchResult<CodeMatchInfo>> possibleResults = result.determinePossibleResults(word,
+					extraInfo);
+
+			if (possibleResults != null && !possibleResults.isEmpty()) {
+				results.addAll(possibleResults);
+			}
+
+			// Always add a possible result that the word isn't matched
+			results.add(result.addUnmatchedWord(word));
 		}
+
+		//		VariableMatch variableMatch = determineVariableName(word, possibleVariables);
+		//
+		//		if (variableMatch.isMatch()) {
+		//
+		//			wordIndex++;
+		//			System.out.printf("%s %s%n", variableMatch.getScore(), variableMatch.getCode());
+		//			IVariableBinding binding = variableMatch.getBinding();
+		//
+		//			if (binding != null) {
+		//				ITypeBinding type = binding.getType();
+		//				Collection<IMethodBinding> methods = determineMethodsForType(type);
+		//
+		//				//				methods.forEach(System.out::println);
+		//
+		//				// Check next word to see if part of variable name
+		//				if (words.length > wordIndex) {
+		//					word = words[wordIndex];
+		//				}
+		//
+		//				// Check next word to see if invoking method
+		//				if (words.length > wordIndex) {
+		//					word = words[wordIndex];
+		//
+		//					Stream<String> suggestions = methods.stream()
+		//							.map(IMethodBinding::getName)
+		//							.distinct();
+		//
+		//					List<Indexed<String>> similarity = determineSimilarity(suggestions, word, true);
+		//					System.out.println("Similar methods: ");
+		//					similarity.forEach(System.out::println);
+		//				}
+		//			}
+		//		}
 
 		return "";
 	}

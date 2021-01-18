@@ -1,5 +1,7 @@
 package info.codesaway.dyce.grammar;
 
+import org.eclipse.jdt.core.dom.ITypeBinding;
+
 public interface CodeMatch {
 	int getScore();
 
@@ -8,4 +10,6 @@ public interface CodeMatch {
 	}
 
 	String getCode();
+
+	ITypeBinding getReturnType();
 }

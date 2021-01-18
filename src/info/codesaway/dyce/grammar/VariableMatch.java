@@ -1,5 +1,6 @@
 package info.codesaway.dyce.grammar;
 
+import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.IVariableBinding;
 
 import info.codesaway.bex.Indexed;
@@ -35,5 +36,22 @@ public class VariableMatch implements CodeMatch {
 
 	public IVariableBinding getBinding() {
 		return this.binding;
+	}
+
+	public boolean hasBinding() {
+		return this.binding != null;
+	}
+
+	@Override
+	public ITypeBinding getReturnType() {
+		return this.hasBinding()
+				? this.getBinding().getType()
+				: null;
+	}
+
+	@Override
+	public String toString() {
+		return String.format("%s%s", this.getCode(),
+				this.hasBinding() ? String.format("(%s)", this.getReturnType().getQualifiedName()) : "");
 	}
 }
