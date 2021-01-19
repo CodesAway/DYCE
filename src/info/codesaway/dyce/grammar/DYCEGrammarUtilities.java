@@ -1,6 +1,9 @@
 package info.codesaway.dyce.grammar;
 
+import static info.codesaway.bex.BEXSide.LEFT;
+import static info.codesaway.bex.BEXSide.RIGHT;
 import static info.codesaway.bex.diff.BasicDiffType.INSERT;
+import static info.codesaway.bex.util.BEXUtilities.in;
 import static info.codesaway.bex.util.BEXUtilities.not;
 import static info.codesaway.dyce.util.DYCEUtilities.getNodeRange;
 import static info.codesaway.dyce.util.EclipseUtilities.getActivePathname;
@@ -17,6 +20,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.NavigableSet;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -51,11 +55,15 @@ import org.eclipse.jface.text.IDocument;
 
 import info.codesaway.bex.Indexed;
 import info.codesaway.bex.IndexedValue;
+import info.codesaway.bex.IntBEXPair;
 import info.codesaway.bex.IntBEXRange;
+import info.codesaway.bex.IntPair;
 import info.codesaway.bex.IntRange;
+import info.codesaway.bex.diff.DiffChange;
 import info.codesaway.bex.diff.DiffEdit;
 import info.codesaway.bex.diff.DiffHelper;
 import info.codesaway.bex.diff.DiffLine;
+import info.codesaway.bex.diff.DiffType;
 import info.codesaway.bex.diff.DiffUnit;
 import info.codesaway.bex.diff.myers.MyersLinearDiff;
 import info.codesaway.bex.parsing.BEXParsingLanguage;
@@ -78,7 +86,7 @@ public final class DYCEGrammarUtilities {
 		throw new UnsupportedOperationException();
 	}
 
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 
 	private static final ThreadLocal<Matcher> COMBINE_CAPS = Pattern
 			.getThreadLocalMatcher(" (?<!\\b(?i:set|set to|as|declare|assign|of) )(?=[A-Z])");
@@ -223,8 +231,10 @@ public final class DYCEGrammarUtilities {
 	public static String determineCodeForSentence(final String text) {
 		String[] words = SPACE_PATTERN.split(text);
 
-		System.out.println("Words:");
-		Arrays.stream(words).forEach(System.out::println);
+		if (DEBUG) {
+			System.out.println("Words:");
+			Arrays.stream(words).forEach(System.out::println);
+		}
 
 		if (words.length == 0) {
 			return "";
@@ -256,7 +266,9 @@ public final class DYCEGrammarUtilities {
 			int wordIndex = result.getWordCount();
 
 			if (wordIndex == words.length) {
-				System.out.println("Result is match? " + result.isMatch() + "\t" + result);
+				if (DEBUG) {
+					System.out.println("Result is match? " + result.isMatch() + "\t" + result);
+				}
 
 				if (result.isMatch()) {
 					finalResults.add(result);
@@ -267,8 +279,10 @@ public final class DYCEGrammarUtilities {
 
 			String word = words[wordIndex];
 
-			System.out.println("Initially: " + result);
-			System.out.println("Word: " + word);
+			if (DEBUG) {
+				System.out.println("Initially: " + result);
+				System.out.println("Word: " + word);
+			}
 
 			Collection<CodeMatchResult<CodeMatchInfo>> possibleResults = result.determinePossibleResults(word,
 					extraInfo);
@@ -281,13 +295,18 @@ public final class DYCEGrammarUtilities {
 			results.add(result.addUnmatchedWord(word));
 		}
 
-		System.out.println("Final results:");
-		while (!finalResults.isEmpty()) {
-			CodeMatchResult<CodeMatchInfo> result = finalResults.remove();
-			System.out.printf("%d\t%s%n", result.getScore(), result);
+		// TODO: what to do if no results matched??
+		String code = finalResults.isEmpty() ? text : finalResults.element().getCode();
+
+		if (DEBUG) {
+			System.out.println("Final results:");
+			while (!finalResults.isEmpty()) {
+				CodeMatchResult<CodeMatchInfo> result = finalResults.remove();
+				System.out.printf("%d\t%s%n", result.getScore(), result);
+			}
 		}
 
-		return "";
+		return code;
 	}
 
 	// TODO: may not be needed / refactored, since first want to determine the code based on variable / method names
@@ -575,7 +594,7 @@ public final class DYCEGrammarUtilities {
 		Stream<String> suggestions = possibleVariables.stream()
 				.map(VariableScope::getName);
 
-		List<Indexed<String>> similarVariableNames = determineSimilarity(suggestions, variableNameText);
+		List<Indexed<String>> similarVariableNames = determineSimilarities(suggestions, variableNameText);
 
 		if (DEBUG) {
 			System.out.println("Similar variable names: \t" + similarVariableNames.size());
@@ -698,7 +717,7 @@ public final class DYCEGrammarUtilities {
 		@SuppressWarnings("unchecked")
 		List<ImportDeclaration> imports = compilationUnit.imports();
 
-		List<Indexed<String>> similarImportNames = determineSimilarity(imports.stream()
+		List<Indexed<String>> similarImportNames = determineSimilarities(imports.stream()
 				.map(DYCEGrammarUtilities::getImportedClassName), classNameText);
 
 		// TODO: also keep track of the package name, in case need to add import
@@ -731,7 +750,7 @@ public final class DYCEGrammarUtilities {
 					.stream()
 					.map(DYCESearchResultEntry::getClassName);
 
-			List<Indexed<String>> similarSearchedNames = determineSimilarity(suggestions, classNameText, true);
+			List<Indexed<String>> similarSearchedNames = determineSimilarities(suggestions, classNameText, true);
 
 			if (match == null && similarSearchedNames.isEmpty()) {
 				return classNameText;
@@ -770,11 +789,12 @@ public final class DYCEGrammarUtilities {
 		return importedClass.getIdentifier();
 	}
 
-	public static List<Indexed<String>> determineSimilarity(final Stream<String> suggestions, final String inputText) {
-		return determineSimilarity(suggestions, inputText, false);
+	public static List<Indexed<String>> determineSimilarities(final Stream<String> suggestions,
+			final String inputText) {
+		return determineSimilarities(suggestions, inputText, false);
 	}
 
-	public static List<Indexed<String>> determineSimilarity(final Stream<String> suggestions, final String inputText,
+	public static List<Indexed<String>> determineSimilarities(final Stream<String> suggestions, final String inputText,
 			final boolean ignoreDifferences) {
 		return suggestions
 				.map(i -> determineSimilarity(i, inputText, ignoreDifferences))
@@ -792,6 +812,7 @@ public final class DYCEGrammarUtilities {
 	 */
 	public static Indexed<String> determineSimilarity(final String suggestion, final String inputText,
 			final boolean ignoreDifferences) {
+
 		// Use Myers diff to determine corresponding parts
 		// * Preferred over LCS since Myers is better at finding continuous ranges of matching characters
 		// * These continuous ranges result in higher scores
@@ -820,11 +841,63 @@ public final class DYCEGrammarUtilities {
 			}
 
 			// Find consecutive of the same type
-			List<DiffUnit> diffBlocks = DiffHelper.combineToDiffBlocks(diff);
+			List<DiffEdit> filteredDiff = new ArrayList<>(diff);
+			filteredDiff.removeIf(e -> in(e.getText(), " ", "_"));
+
+			List<DiffUnit> diffBlocks = DiffHelper.combineToDiffBlocks(filteredDiff);
+
+			// Combine into changes (logic based on RangeComparatorBEX class in BEX plugin)
+			// In this case, combining blocks that should be treated as normalized equal where either the left side or right side is continuous
+			List<DiffChange<String>> changes = new ArrayList<>();
+			List<DiffUnit> currentChanges = new ArrayList<>();
+			DiffType currentChangeType = null;
+			IntPair currentEnd = IntBEXPair.ZERO;
+
+			for (DiffUnit diffBlock : diffBlocks) {
+				DiffType type = diffBlock.getType();
+				List<DiffEdit> edits = diffBlock.getEdits();
+				IntBEXPair blockStart = edits.get(0).getLineNumber();
+
+				boolean isConsecutive = DiffHelper.isConsecutive(LEFT, currentEnd, blockStart, false)
+						|| DiffHelper.isConsecutive(RIGHT, currentEnd, blockStart, false);
+				boolean partOfCurrentChanges = Objects.equals(type, currentChangeType)
+						&& type.shouldTreatAsNormalizedEqual()
+						&& isConsecutive;
+
+				if (partOfCurrentChanges) {
+					currentChanges.add(diffBlock);
+				} else {
+					if (!currentChanges.isEmpty()) {
+						// TODO: could use info as debugging info?
+						String info = "";
+						changes.add(new DiffChange<>(currentChangeType, currentChanges, info));
+						currentChanges.clear();
+					}
+
+					// Reset values
+					currentChangeType = type;
+					currentChanges.add(diffBlock);
+					currentEnd = edits.get(edits.size() - 1).getLineNumber();
+				}
+			}
+
+			if (!currentChanges.isEmpty()) {
+				// TODO: could use info as debugging info?
+				String info = "";
+				changes.add(new DiffChange<>(currentChangeType, currentChanges, info));
+				currentChanges.clear();
+			}
+
+			if (DEBUG) {
+				for (int i = 0; i < changes.size(); i++) {
+					System.out.println("Change " + (i + 1));
+					changes.get(i).getEdits().forEach(System.out::println);
+				}
+			}
 
 			// Also consider runs of matching characters as part of score
 			// For example, 2 runs of 3 matching characters is a better match than 6 individual characters matching
-			for (DiffUnit diffUnit : diffBlocks) {
+			for (DiffUnit diffUnit : changes) {
 				if (!diffUnit.shouldTreatAsNormalizedEqual()) {
 					continue;
 				}
@@ -842,9 +915,7 @@ public final class DYCEGrammarUtilities {
 			}
 		}
 
-		boolean showDebug = false;
-
-		if (showDebug) {
+		if (DEBUG) {
 			System.out.printf("Similar? %s %d %d: score %d%n", suggestion, matchingCount, difference, score);
 		}
 

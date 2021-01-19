@@ -1,7 +1,7 @@
 package info.codesaway.dyce.grammar.java;
 
 import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.determineMethodsForType;
-import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.determineSimilarity;
+import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.determineSimilarities;
 import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.determineVariableName;
 import static java.util.stream.Collectors.toMap;
 
@@ -164,7 +164,7 @@ public class JavaChainCodeMatchResult implements CodeMatchResult<CodeMatchInfo> 
 			VariableMatch variableMatch = determineVariableName(unmatchedWords);
 
 			if (variableMatch.isMatch()) {
-				System.out.println("VariableMatch: " + variableMatch);
+				//				System.out.println("VariableMatch: " + variableMatch);
 				results.add(this.addMatch(variableMatch));
 			}
 		}
@@ -188,7 +188,7 @@ public class JavaChainCodeMatchResult implements CodeMatchResult<CodeMatchInfo> 
 				.map(IMethodBinding::getName)
 				.distinct();
 
-		List<Indexed<String>> similarity = determineSimilarity(suggestions, unmatchedWords, true);
+		List<Indexed<String>> similarity = determineSimilarities(suggestions, unmatchedWords, true);
 
 		if (similarity.isEmpty()) {
 			return;
@@ -224,7 +224,7 @@ public class JavaChainCodeMatchResult implements CodeMatchResult<CodeMatchInfo> 
 			}
 		}
 
-		System.out.println("Similar methods: ");
-		similarity.forEach(System.out::println);
+		//		System.out.println("Similar methods: ");
+		//		similarity.forEach(System.out::println);
 	}
 }

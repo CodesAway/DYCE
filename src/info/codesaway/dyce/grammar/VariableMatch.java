@@ -52,6 +52,6 @@ public class VariableMatch implements CodeMatch {
 	@Override
 	public String toString() {
 		return String.format("%s%s", this.getCode(),
-				this.hasBinding() ? String.format("(%s)", this.getReturnType().getQualifiedName()) : "");
+				this.hasBinding() ? ": " + this.getReturnType().getQualifiedName() : "");
 	}
 }
