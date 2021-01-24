@@ -1,12 +1,6 @@
 package info.codesaway.dyce;
 
-import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.convertLineTextToSentence;
-import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.convertSentenceToCode;
-import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.determineClassName;
 import static info.codesaway.dyce.grammar.DYCEGrammarUtilities.determineCodeForSentence;
-import static info.codesaway.dyce.util.EclipseUtilities.getActiveDocument;
-import static info.codesaway.dyce.util.EclipseUtilities.getActivePathname;
-import static info.codesaway.dyce.util.EclipseUtilities.getDocumentLine;
 import static info.codesaway.dyce.util.EclipseUtilities.insertText;
 
 import java.nio.file.Path;
@@ -14,7 +8,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Function;
 
 import javax.annotation.PostConstruct;
@@ -29,8 +22,6 @@ import org.eclipse.core.resources.IResourceDelta;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.NonNullByDefault;
-import org.eclipse.jface.text.BadLocationException;
-import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.viewers.ArrayContentProvider;
 import org.eclipse.jface.viewers.ColumnLabelProvider;
 import org.eclipse.jface.viewers.DelegatingStyledCellLabelProvider;
@@ -54,8 +45,6 @@ import org.eclipse.swt.widgets.TableColumn;
 import org.eclipse.ui.model.WorkbenchLabelProvider;
 import org.eclipse.ui.part.ViewPart;
 
-import info.codesaway.bex.Indexed;
-import info.codesaway.dyce.grammar.DYCEGrammarUtilities;
 import info.codesaway.dyce.indexer.DYCEIndexer;
 import info.codesaway.dyce.jobs.DYCEIndexJob;
 import info.codesaway.dyce.jobs.DYCESearchJob;
@@ -386,11 +375,15 @@ public class DYCEView extends ViewPart {
 			// TODO: testing in static block of BaseAction
 			// Why can't it find the correct variable with just "context"?
 			// Why can't it find the DEBUG field?
-			determineCodeForSentence(this.getText());
+			String codeResult = determineCodeForSentence(this.getText());
 
-			if (true) {
-				return;
+			if (!codeResult.isEmpty()) {
+				insertText(codeResult);
 			}
+
+			//			if (true) {
+			//				return;
+			//			}
 
 			//			determineVariableName("name context");
 			//			determineVariableName("debug");
@@ -423,59 +416,64 @@ public class DYCEView extends ViewPart {
 			// Action is part of impors, but there's also a BaseAction class which is a perfect match
 			//			determineClassName("base action");
 			//			determineClassName("maintain");
-			determineClassName("comment out");
+			//			determineClassName("comment out");
 			//			determineClassName("comment");
 
 			// 7 * 0.75 + 6 + 21
-			String text = this.getText();
+			//			String text = this.getText();
 
 			// TODO: try to search using query
 			// If find results, then perform search and don't try to insert text
-			if (!text.isEmpty()) {
-				String codeResult = DYCEGrammarUtilities.convertSentenceToCode(text);
-				insertText(codeResult);
-			}
+			//			if (!text.isEmpty()) {
+			//				String codeResult = DYCEGrammarUtilities.convertSentenceToCode(text);
+			//				insertText(codeResult);
+			//			}
 
-			Indexed<Optional<String>> activePathname = getActivePathname();
-
-			if (activePathname.getValue().isPresent()) {
-				String pathname = activePathname.getValue().get();
-				int currentLine = activePathname.getIndex();
-
-				System.out.printf("In %s on line %d%n", pathname, currentLine);
-				Optional<IDocument> optionalDocument = getActiveDocument();
-
-				if (optionalDocument.isPresent()) {
-					// Subtract 1 since document's lines start with 0 whereas UI start with 1
-					int documentLine = currentLine - 1;
-					IDocument document = optionalDocument.get();
-					try {
-						//						String currentLineText = DYCEUtilities.getDocumentLine(document, documentLine);
-						//						System.out.println("Current line: " + currentLineText);
-
-						String sentence = convertLineTextToSentence(document, documentLine);
-						String code = convertSentenceToCode(sentence);
-
-						if (code.trim().equals(getDocumentLine(document, documentLine).trim())) {
-							System.out.println("Great job!");
-						}
-					} catch (BadLocationException e1) {
-					}
-				}
-			}
+			//			Indexed<Optional<String>> activePathname = getActivePathname();
+			//
+			//			if (activePathname.getValue().isPresent()) {
+			//				String pathname = activePathname.getValue().get();
+			//				int currentLine = activePathname.getIndex();
+			//
+			//				System.out.printf("In %s on line %d%n", pathname, currentLine);
+			//				Optional<IDocument> optionalDocument = getActiveDocument();
+			//
+			//				if (optionalDocument.isPresent()) {
+			//					// Subtract 1 since document's lines start with 0 whereas UI start with 1
+			//					int documentLine = currentLine - 1;
+			//					IDocument document = optionalDocument.get();
+			//					try {
+			//						//						String currentLineText = DYCEUtilities.getDocumentLine(document, documentLine);
+			//						//						System.out.println("Current line: " + currentLineText);
+			//
+			//						String sentence = convertLineTextToSentence(document, documentLine);
+			//						String code = convertSentenceToCode(sentence);
+			//
+			//						if (code.trim().equals(getDocumentLine(document, documentLine).trim())) {
+			//							System.out.println("Great job!");
+			//						}
+			//					} catch (BadLocationException e1) {
+			//					}
+			//				}
+			//			}
 
 			this.searchText.selectAll();
 			//			this.outputMethods();
 
-			int hitLimit = 5;
-			//			int hitLimit = this.getHitLimit(e);
-			//
-			//			if (this.isIncrementalSearch() && DEFAULT_INCREMENTAL_HIT_LIMIT > hitLimit) {
-			//				hitLimit = DEFAULT_INCREMENTAL_HIT_LIMIT;
-			//			}
+			// TODO: when to search versus when to insert text?
+			// Think should have dropdown
+			// Code
+			// Method - used to lookup method name and variable / class to call from
 
-			//			this.search(0, false, hitLimit);
-			this.search(hitLimit);
+			//			int hitLimit = 5;
+			//			//			int hitLimit = this.getHitLimit(e);
+			//			//
+			//			//			if (this.isIncrementalSearch() && DEFAULT_INCREMENTAL_HIT_LIMIT > hitLimit) {
+			//			//				hitLimit = DEFAULT_INCREMENTAL_HIT_LIMIT;
+			//			//			}
+			//
+			//			//			this.search(0, false, hitLimit);
+			//			this.search(hitLimit);
 			return;
 		}
 	}

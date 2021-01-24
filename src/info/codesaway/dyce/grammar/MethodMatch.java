@@ -1,5 +1,10 @@
 package info.codesaway.dyce.grammar;
 
+import java.util.StringJoiner;
+
+import org.eclipse.jdt.core.IJavaElement;
+import org.eclipse.jdt.core.IMethod;
+import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.core.dom.IMethodBinding;
 import org.eclipse.jdt.core.dom.ITypeBinding;
 
@@ -31,7 +36,32 @@ public class MethodMatch implements CodeMatch {
 
 	@Override
 	public String getCode() {
-		return this.code.getValue();
+		StringJoiner result = new StringJoiner(", ", this.code.getValue() + "(", ")");
+
+		// TODO: is this the right place to handle parameters?
+		// How would I handle determining suggested parameters based on current context?
+		boolean includedParameters = false;
+
+		if (this.hasBinding()) {
+			IJavaElement javaElement = this.binding.getJavaElement();
+
+			if (javaElement instanceof IMethod) {
+				try {
+					IMethod method = (IMethod) javaElement;
+					for (String parameterName : method.getParameterNames()) {
+						result.add(parameterName);
+					}
+					includedParameters = true;
+				} catch (JavaModelException e) {
+				}
+			}
+		}
+
+		if (!includedParameters) {
+			// TODO: do something
+		}
+
+		return result.toString();
 	}
 
 	public IMethodBinding getBinding() {
@@ -44,6 +74,19 @@ public class MethodMatch implements CodeMatch {
 
 	@Override
 	public ITypeBinding getReturnType() {
+		// TODO: handle getting correct return type when call getClass method
+		// (likely need to pass class which method was invoked on)
+
+		//		if (this.hasBinding() && this.getBinding().getName().equals("getClass")
+		//				&& this.getBinding().getParameterTypes().length == 0) {
+		//			// Object.getClass method should return Class<? extends |X|> per documentation
+		//			System.out.println("getClass method: " + this.getBinding().getReturnType().getName() + "\t"
+		//					+ this.getBinding().getReturnType().getErasure().getName());
+		//			System.out.println("Binding: " + BindingKey.createWildcardTypeBindingKey(
+		//					this.getBinding().getReturnType().getErasure().getQualifiedName(), Signature.C_EXTENDS,
+		//					this.getBinding().toString(), 0));
+		//		}
+
 		return this.hasBinding()
 				? this.getBinding().getReturnType()
 				: null;

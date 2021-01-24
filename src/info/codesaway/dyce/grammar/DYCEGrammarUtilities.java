@@ -88,6 +88,8 @@ public final class DYCEGrammarUtilities {
 
 	private static boolean DEBUG = true;
 
+	private static ITypeBinding OBJECT_BINDING;
+
 	private static final ThreadLocal<Matcher> COMBINE_CAPS = Pattern
 			.getThreadLocalMatcher(" (?<!\\b(?i:set|set to|as|declare|assign|of) )(?=[A-Z])");
 
@@ -116,6 +118,15 @@ public final class DYCEGrammarUtilities {
 		}
 
 		return fibonacciNumbers;
+	}
+
+	public static int getFibonacciNumber(final int index) {
+		if (index < FIBONACCI_NUMBERS.length) {
+			return FIBONACCI_NUMBERS[index];
+		} else {
+			int lastIndex = FIBONACCI_NUMBERS.length - 1;
+			return FIBONACCI_NUMBERS[lastIndex] + FIBONACCI_NUMBERS[lastIndex - 1] + index;
+		}
 	}
 
 	private static Comparator<Indexed<String>> getDescendingIndexedComparator() {
@@ -229,7 +240,22 @@ public final class DYCEGrammarUtilities {
 			.withInitial(() -> SPACE_PATTERN.matcher());
 
 	public static String determineCodeForSentence(final String text) {
-		String[] words = SPACE_PATTERN.split(text);
+		String normalizedText = text.trim();
+		boolean endsWithBrace = false;
+		boolean endsWithSemicolon = false;
+
+		if (normalizedText.endsWith("{")) {
+			normalizedText = normalizedText.substring(0, normalizedText.length() - "{".length());
+			endsWithBrace = true;
+		}
+
+		if (normalizedText.endsWith(".")) {
+			// Change period to semicolon
+			normalizedText = normalizedText.substring(0, normalizedText.length() - ".".length());
+			endsWithSemicolon = true;
+		}
+
+		String[] words = SPACE_PATTERN.split(normalizedText);
 
 		if (DEBUG) {
 			System.out.println("Words:");
@@ -306,7 +332,11 @@ public final class DYCEGrammarUtilities {
 			}
 		}
 
-		return code;
+		String result = code
+				+ (endsWithBrace ? "{" : "")
+				+ (endsWithSemicolon ? ";" : "");
+
+		return result;
 	}
 
 	// TODO: may not be needed / refactored, since first want to determine the code based on variable / method names
@@ -439,6 +469,10 @@ public final class DYCEGrammarUtilities {
 		} catch (IOException e) {
 			// If cannot read the file (should never happen), just return the passed text
 			return Collections.emptyList();
+		}
+
+		if (OBJECT_BINDING == null) {
+			OBJECT_BINDING = astNode.getAST().resolveWellKnownType("java.lang.Object");
 		}
 
 		if (!(astNode instanceof CompilationUnit)) {
@@ -646,9 +680,9 @@ public final class DYCEGrammarUtilities {
 		// Index this, since fairly static
 		// https://stackoverflow.com/a/36964588
 		List<ITypeBinding> bindingsAlreadyProcessed = new ArrayList<>();
-
 		ArrayDeque<ITypeBinding> bindingsToProcess = new ArrayDeque<>();
 		bindingsToProcess.add(type);
+		bindingsToProcess.add(OBJECT_BINDING);
 
 		Set<IMethodBinding> methods = new TreeSet<>(Comparator.comparing(IMethodBinding::getName));
 
@@ -827,6 +861,10 @@ public final class DYCEGrammarUtilities {
 
 		int difference = suggestion.length() - matchingCount;
 
+		if (DEBUG) {
+			System.out.println("Suggestion: " + suggestion + "\t" + inputText);
+		}
+
 		int score;
 
 		if (!isSimilar || difference > MAX_DIFFERENCE && !ignoreDifferences) {
@@ -888,12 +926,12 @@ public final class DYCEGrammarUtilities {
 				currentChanges.clear();
 			}
 
-			if (DEBUG) {
-				for (int i = 0; i < changes.size(); i++) {
-					System.out.println("Change " + (i + 1));
-					changes.get(i).getEdits().forEach(System.out::println);
-				}
-			}
+			//			if (DEBUG) {
+			//				for (int i = 0; i < changes.size(); i++) {
+			//					System.out.println("Change " + (i + 1));
+			//					changes.get(i).getEdits().forEach(System.out::println);
+			//				}
+			//			}
 
 			// Also consider runs of matching characters as part of score
 			// For example, 2 runs of 3 matching characters is a better match than 6 individual characters matching
@@ -904,13 +942,8 @@ public final class DYCEGrammarUtilities {
 				int count = diffUnit.getEdits().size();
 
 				// Use fibonacci numbers, since a run of 6 is better than 2 runs of 3, even though both 6 characters
-				if (count > 1 && count < FIBONACCI_NUMBERS.length) {
-					score += FIBONACCI_NUMBERS[count];
-				} else if (count >= FIBONACCI_NUMBERS.length) {
-					// This means there are at least 100 consecutive characters in the match
-					// (that's a long name)
-					int lastIndex = FIBONACCI_NUMBERS.length - 1;
-					score += FIBONACCI_NUMBERS[lastIndex] + FIBONACCI_NUMBERS[lastIndex + 1] + count;
+				if (count > 1) {
+					score += getFibonacciNumber(count);
 				}
 			}
 		}

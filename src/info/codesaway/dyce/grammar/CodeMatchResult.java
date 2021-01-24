@@ -10,25 +10,6 @@ public interface CodeMatchResult<I> extends CodeMatch {
 	int getWordCount();
 
 	/**
-	 * Creates a new result which adds the specified match
-	 *
-	 * @param match the match to add to the new result
-	 * @return a new CodeMatchResult containing this CodeMatchResult's matches and the specified <code>match</code> added to the end
-	 */
-	public default CodeMatchResult<I> addMatch(final CodeMatch match) {
-		return this.addMatch(match, 1);
-	}
-
-	/**
-	 * Creates a new result which adds the specified match
-	 *
-	 * @param match the match to add to the new result
-	 * @param consumedWordCount the number of words consumed as part of this match
-	 * @return a new CodeMatchResult containing this CodeMatchResult's matches and the specified <code>match</code> added to the end
-	 */
-	public CodeMatchResult<I> addMatch(final CodeMatch match, final int consumedWordCount);
-
-	/**
 	 * Creates a new result which adds the specified unmatched word
 	 * @param unmatchedWord the unmatched word to add
 	 *

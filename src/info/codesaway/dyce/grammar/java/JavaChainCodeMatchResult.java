@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.StringJoiner;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -76,15 +77,19 @@ public class JavaChainCodeMatchResult implements CodeMatchResult<CodeMatchInfo> 
 			return "CodeMatchResultValue{EMPTY}";
 		}
 
-		// TODO: need to implement
-		return this.matches.toString();
+		StringJoiner code = new StringJoiner(".");
+		for (CodeMatch match : this.matches) {
+			code.add(match.getCode());
+		}
+
+		return code.toString();
 	}
 
 	private List<CodeMatch> getMatches() {
 		return this.matches;
 	}
 
-	private CodeMatch getLastMatch() {
+	public CodeMatch getLastMatch() {
 		return this.matches.isEmpty() ? null : this.matches.get(this.matches.size() - 1);
 	}
 
@@ -98,7 +103,23 @@ public class JavaChainCodeMatchResult implements CodeMatchResult<CodeMatchInfo> 
 		return this.matches.isEmpty() ? null : this.getLastMatch().getReturnType();
 	}
 
-	@Override
+	/**
+	 * Creates a new result which adds the specified match
+	 *
+	 * @param match the match to add to the new result
+	 * @return a new CodeMatchResult containing this CodeMatchResult's matches and the specified <code>match</code> added to the end
+	 */
+	public CodeMatchResult<CodeMatchInfo> addMatch(final CodeMatch match) {
+		return this.addMatch(match, 1);
+	}
+
+	/**
+	 * Creates a new result which adds the specified match
+	 *
+	 * @param match the match to add to the new result
+	 * @param consumedWordCount the number of words consumed as part of this match
+	 * @return a new CodeMatchResult containing this CodeMatchResult's matches and the specified <code>match</code> added to the end
+	 */
 	public CodeMatchResult<CodeMatchInfo> addMatch(final CodeMatch match, final int consumedWordCount) {
 		int wordCount = this.getWordCount() + consumedWordCount;
 
@@ -149,6 +170,18 @@ public class JavaChainCodeMatchResult implements CodeMatchResult<CodeMatchInfo> 
 
 		Collection<CodeMatchResult<CodeMatchInfo>> results = new ArrayList<>();
 
+		if (!this.hasUnmatchedWords()) {
+			// TODO: differentiate declare versus assign
+			// Declare will create a new variable
+			// Assign will assign to an existing non-final variable (of the same type) and create one if couldn't find any matches
+			// TODO: add support for assigning to field
+			if (nextUnmatchedWord.equals("declare")) {
+				results.add(new JavaAssignmentCodeMatchResult(this, "", this.getWordCount() + 1));
+			} else if (nextUnmatchedWord.equals("assign")) {
+				results.add(new JavaAssignmentCodeMatchResult(this, "", this.getWordCount() + 1));
+			}
+		}
+
 		String unmatchedWords = this.getUnmatchedWords(nextUnmatchedWord);
 
 		this.checkForVariableMatch(results, unmatchedWords);
@@ -159,14 +192,16 @@ public class JavaChainCodeMatchResult implements CodeMatchResult<CodeMatchInfo> 
 
 	private void checkForVariableMatch(final Collection<CodeMatchResult<CodeMatchInfo>> results,
 			final String unmatchedWords) {
-		if (!(this.getLastMatch() instanceof VariableMatch)) {
-			// TODO: use extra info to store the possible variable names (so don't need to recompute each time)
-			VariableMatch variableMatch = determineVariableName(unmatchedWords);
+		if (this.getLastMatch() != null) {
+			return;
+		}
 
-			if (variableMatch.isMatch()) {
-				//				System.out.println("VariableMatch: " + variableMatch);
-				results.add(this.addMatch(variableMatch));
-			}
+		// TODO: use extra info to store the possible variable names (so don't need to recompute each time)
+		VariableMatch variableMatch = determineVariableName(unmatchedWords);
+
+		if (variableMatch.isMatch()) {
+			//				System.out.println("VariableMatch: " + variableMatch);
+			results.add(this.addMatch(variableMatch));
 		}
 	}
 
